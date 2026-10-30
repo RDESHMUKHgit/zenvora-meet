@@ -67,12 +67,14 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
       trigger={trigger}
       open={open}
       onOpenChange={setOpen}
-      overlayInnerStyle={{
-        padding: '4px 6px',
-        backgroundColor: tokens.colors.surfacePrimary,
-        borderRadius: '24px',
-        border: `1px solid ${tokens.colors.surfaceBorder}`,
-        boxShadow: tokens.shadows.elevated,
+      styles={{
+        container: {
+          padding: '4px 6px',
+          backgroundColor: tokens.colors.surfacePrimary,
+          borderRadius: '24px',
+          border: `1px solid ${tokens.colors.surfaceBorder}`,
+          boxShadow: tokens.shadows.elevated,
+        },
       }}
     >
       <Button
@@ -93,3 +95,4 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
     </Popover>
   );
 };
+

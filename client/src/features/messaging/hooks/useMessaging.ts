@@ -19,7 +19,15 @@ export function useMessaging({
 }: UseMessagingProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
+  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(() => {
+    if (typeof window === 'undefined' || !meetingCode) return {};
+    try {
+      const cached = localStorage.getItem(`rd_chat_messages_${meetingCode.toLowerCase()}`);
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
   const [unreadConvs, setUnreadConvs] = useState<Set<string>>(new Set());
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -30,6 +38,18 @@ export function useMessaging({
 
   const isChatOpenRef = useRef<boolean>(isChatOpen);
   isChatOpenRef.current = isChatOpen;
+
+  // Persist messages to localStorage for refresh preservation
+  useEffect(() => {
+    if (typeof window === 'undefined' || !meetingCode) return;
+    if (Object.keys(messages).length > 0) {
+      try {
+        localStorage.setItem(`rd_chat_messages_${meetingCode.toLowerCase()}`, JSON.stringify(messages));
+      } catch {
+        // Storage quota fallback
+      }
+    }
+  }, [messages, meetingCode]);
 
   // Initialize conversations list
   const loadConversations = useCallback(async () => {
@@ -63,10 +83,23 @@ export function useMessaging({
           isSelf: m.senderParticipantId === participantId,
         }));
 
-        setMessages((prev) => ({
-          ...prev,
-          [convId]: mapped,
-        }));
+        setMessages((prev) => {
+          const localList = prev[convId] || [];
+          const map = new Map<string, ChatMessage>();
+          for (const m of localList) {
+            map.set(m.id, m);
+          }
+          for (const m of mapped) {
+            map.set(m.id, m);
+          }
+          const merged = Array.from(map.values()).sort((a, b) =>
+            (a.createdAt || '').localeCompare(b.createdAt || '')
+          );
+          return {
+            ...prev,
+            [convId]: merged,
+          };
+        });
 
         // Mark unread messages as read
         const unreadIds = mapped
@@ -325,20 +358,23 @@ export function useMessaging({
     loadConversations();
   }, [loadConversations]);
 
+  // Automatically join socket channel and load messages whenever activeConversationId changes
+  useEffect(() => {
+    if (!activeConversationId || !meetingCode || !participantId) return;
+
+    const socket = connectSocket();
+    socket.emit('chat:join', {
+      meetingCode,
+      conversationId: activeConversationId,
+      participantId,
+    });
+    loadMessages(activeConversationId);
+  }, [activeConversationId, meetingCode, participantId, loadMessages]);
+
   useEffect(() => {
     if (!meetingCode || !participantId) return;
 
     const socket = connectSocket();
-
-    // Join default room if selected
-    if (activeConvRef.current) {
-      socket.emit('chat:join', {
-        meetingCode,
-        conversationId: activeConvRef.current,
-        participantId,
-      });
-      loadMessages(activeConvRef.current);
-    }
 
     // Handlers
     const handleMessageNew = (newMsg: ChatMessage) => {
@@ -349,6 +385,10 @@ export function useMessaging({
         isSelf,
         status: 'sent',
       };
+
+      if (!activeConvRef.current && !newMsg.conversationId.includes('direct')) {
+        setActiveConversationId(newMsg.conversationId);
+      }
 
       setMessages((prev) => {
         const list = prev[newMsg.conversationId] || [];
@@ -362,9 +402,10 @@ export function useMessaging({
           nextList = [...list];
           nextList[index] = enrichedMsg;
         } else {
-          // If already in list by id, ignore duplicate
-          if (list.some((m) => m.id === newMsg.id)) {
-            nextList = list;
+          const idIndex = list.findIndex((m) => m.id === newMsg.id);
+          if (idIndex >= 0) {
+            nextList = [...list];
+            nextList[idIndex] = enrichedMsg;
           } else {
             nextList = [...list, enrichedMsg];
           }
@@ -575,3 +616,4 @@ export function useMessaging({
     reloadConversations: loadConversations,
   };
 }
+

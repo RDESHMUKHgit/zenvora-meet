@@ -76,23 +76,39 @@ export const MeetingPage: React.FC = () => {
 
   // Participant identity
   const [participantId] = useState<string>(() => {
-    return (
+    const val =
       stateData.participantId ||
-      localStorage.getItem(`rd_p_id_${id}`) ||
-      crypto.randomUUID()
-    );
+      (id ? localStorage.getItem(`rd_p_id_${id}`) : null) ||
+      crypto.randomUUID();
+    if (id) {
+      localStorage.setItem(`rd_p_id_${id}`, val);
+    }
+    return val;
   });
 
   const [hostToken] = useState<string | undefined>(() => {
-    return (
+    const token =
       stateData.hostToken ||
-      localStorage.getItem(`rd_host_token_${id}`) ||
-      undefined
-    );
+      (id ? localStorage.getItem(`rd_host_token_${id}`) : null) ||
+      undefined;
+    if (id && token) {
+      localStorage.setItem(`rd_host_token_${id}`, token);
+    }
+    return token;
   });
 
   const [displayName] = useState<string>(() => {
-    return stateData.displayName || user?.name || 'Guest User';
+    const name =
+      stateData.displayName ||
+      (id ? localStorage.getItem(`rd_display_name_${id}`) : null) ||
+      localStorage.getItem('rd_display_name') ||
+      user?.name ||
+      'Guest User';
+    localStorage.setItem('rd_display_name', name);
+    if (id) {
+      localStorage.setItem(`rd_display_name_${id}`, name);
+    }
+    return name;
   });
 
   const [myRole, setMyRole] = useState<'host' | 'cohost' | 'participant'>(stateData.role || 'participant');
@@ -882,8 +898,7 @@ export const MeetingPage: React.FC = () => {
             open={Boolean(sidebarTab)}
             onClose={() => setSidebarTab(null)}
             placement="right"
-            width="100%"
-            styles={{ body: { padding: 0 } }}
+            styles={{ wrapper: { width: '100%' }, body: { padding: 0 } }}
             title={sidebarTab === 'chat' ? 'In-Call Chat' : 'Participants'}
           >
             {sidebarTab === 'chat' && (

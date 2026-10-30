@@ -25,7 +25,9 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   const { message } = App.useApp();
 
   const [title, setTitle] = useState('Sync Discussion');
-  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [displayName, setDisplayName] = useState(
+    () => user?.name || (typeof window !== 'undefined' ? localStorage.getItem('rd_display_name') : null) || ''
+  );
   const [maxParticipants, setMaxParticipants] = useState<number>(0);
   const [isEphemeral, setIsEphemeral] = useState(true);
   const [muteMic, setMuteMic] = useState(false);
@@ -65,10 +67,13 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
         isEphemeral,
       });
 
-      // Securely store hostToken for host authorization
+      // Securely store hostToken and participant identity for host authorization
       if (res.hostToken) {
         localStorage.setItem(`rd_host_token_${res.meeting.meetingCode}`, res.hostToken);
       }
+      localStorage.setItem('rd_display_name', displayName.trim());
+      localStorage.setItem(`rd_display_name_${res.meeting.meetingCode}`, displayName.trim());
+      localStorage.setItem(`rd_p_id_${res.meeting.meetingCode}`, res.participant.id);
 
       message.success(`Meeting created: ${res.meeting.meetingCode}`);
       onClose();
@@ -136,7 +141,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       onCancel={onClose}
       footer={null}
       width={480}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '10px' }}>
         {/* Meeting Topic */}

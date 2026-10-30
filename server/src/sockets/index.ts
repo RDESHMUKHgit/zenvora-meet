@@ -93,6 +93,7 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
 
           // Join socket.io channel
           socket.join(`room:${code}`);
+          socket.join(`conv:group-${code}`);
 
           // Emit confirmation to joining client
           socket.emit('room:joined', {
@@ -258,6 +259,12 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
           // Deliver to conversation channel
           io?.to(`conv:${conversationId}`).emit('message:new', newMsg);
 
+          const norm = meetingCode.toLowerCase().trim();
+          // For group chat, also broadcast to room channel so every connected participant receives it instantly
+          if (!newMsg.conversationId.includes('direct')) {
+            io?.to(`room:${norm}`).emit('message:new', newMsg);
+          }
+
           // If this is a direct conversation, also notify the recipient directly if not already in conv room
           if (newMsg.conversationId.includes('direct')) {
             // direct conversation id formats: direct-code-p1-p2 or UUID
@@ -317,6 +324,9 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
         );
 
         io?.to(`conv:${conversationId}`).emit('message:edited', updated);
+        if (!conversationId.includes('direct')) {
+          io?.to(`room:${meetingCode.toLowerCase().trim()}`).emit('message:edited', updated);
+        }
       } catch (err: unknown) {
         socket.emit('chat:error', { message: err instanceof Error ? err.message : 'Failed to edit message' });
       }
@@ -353,6 +363,9 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
         );
 
         io?.to(`conv:${conversationId}`).emit('message:deleted', updated);
+        if (!conversationId.includes('direct')) {
+          io?.to(`room:${meetingCode.toLowerCase().trim()}`).emit('message:deleted', updated);
+        }
       } catch (err: unknown) {
         socket.emit('chat:error', { message: err instanceof Error ? err.message : 'Failed to delete message' });
       }
@@ -391,13 +404,17 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
           emoji
         );
 
-        io?.to(`conv:${conversationId}`).emit('message:reaction', {
+        const reactionPayload = {
           conversationId,
           messageId,
           participantId: validated.participant.id,
           emoji: result.emoji,
           action: result.action,
-        });
+        };
+        io?.to(`conv:${conversationId}`).emit('message:reaction', reactionPayload);
+        if (!conversationId.includes('direct')) {
+          io?.to(`room:${meetingCode.toLowerCase().trim()}`).emit('message:reaction', reactionPayload);
+        }
       } catch (err: unknown) {
         socket.emit('chat:error', { message: err instanceof Error ? err.message : 'Failed to toggle reaction' });
       }
@@ -428,12 +445,16 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
           validated.participant.userId
         );
 
-        io?.to(`conv:${conversationId}`).emit('message:read', {
+        const readPayload = {
           conversationId,
           readerParticipantId: validated.participant.id,
           messageIds,
           readAt: nowIso(),
-        });
+        };
+        io?.to(`conv:${conversationId}`).emit('message:read', readPayload);
+        if (!conversationId.includes('direct')) {
+          io?.to(`room:${meetingCode.toLowerCase().trim()}`).emit('message:read', readPayload);
+        }
       } catch {
         // Ignore read receipt background failures
       }

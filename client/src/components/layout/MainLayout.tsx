@@ -292,7 +292,7 @@ export const MainLayout: React.FC = () => {
         onClose={() => setMobileDrawerOpen(false)}
         open={mobileDrawerOpen}
         closeIcon={<X size={18} />}
-        width={280}
+        styles={{ wrapper: { width: 280 } }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ marginBottom: '20px' }}>

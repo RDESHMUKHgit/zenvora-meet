@@ -13,7 +13,9 @@ export const JoinMeetingArea: React.FC = () => {
   const { message } = App.useApp();
 
   const [meetingCode, setMeetingCode] = useState('');
-  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [displayName, setDisplayName] = useState(
+    () => user?.name || (typeof window !== 'undefined' ? localStorage.getItem('rd_display_name') : null) || ''
+  );
   const [isValidating, setIsValidating] = useState(false);
   const [errors, setErrors] = useState<{ code?: string; name?: string; general?: string }>({});
 
@@ -65,6 +67,11 @@ export const JoinMeetingArea: React.FC = () => {
 
       // Register participant record in backend (validates existence and capacity)
       const res = await meetingApi.joinMeeting(finalCode, finalName);
+
+      // Persist display name and participant identity
+      localStorage.setItem('rd_display_name', finalName);
+      localStorage.setItem(`rd_display_name_${finalCode}`, finalName);
+      localStorage.setItem(`rd_p_id_${finalCode}`, res.participant.id);
 
       message.success(`Joining ${res.meeting.title}...`);
       navigate(`/meeting/${finalCode}`, {

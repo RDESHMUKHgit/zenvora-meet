@@ -23,3 +23,4 @@ chatRouter.post('/conversations/direct', optionalAuth, (req, res, next) =>
 chatRouter.post('/conversations/:conversationId/read', optionalAuth, (req, res, next) =>
   chatController.markAsRead(req, res, next)
 );
+

@@ -174,41 +174,55 @@ export class PeerConnectionManager {
     offer: RTCSessionDescriptionInit,
     localStream: MediaStream | null
   ): Promise<void> {
-    const pc = this.getOrCreatePeerConnection(remoteParticipantId, localStream, false);
-    const isPolite = this.isPolitePeer(remoteParticipantId);
-    const isMakingOffer = this.makingOfferMap.get(remoteParticipantId) || false;
+    try {
+      const pc = this.getOrCreatePeerConnection(remoteParticipantId, localStream, false);
+      const isPolite = this.isPolitePeer(remoteParticipantId);
+      const isMakingOffer = this.makingOfferMap.get(remoteParticipantId) || false;
 
-    const offerCollision = isMakingOffer || pc.signalingState !== 'stable';
-    if (offerCollision) {
-      if (!isPolite) {
-        // Impolite peer ignores incoming offer
-        return;
+      const offerCollision = isMakingOffer || pc.signalingState !== 'stable';
+      if (offerCollision) {
+        if (!isPolite) {
+          // Impolite peer ignores incoming offer
+          return;
+        }
+        // Polite peer rolls back local description to accept remote offer
+        if (pc.signalingState !== 'stable') {
+          await pc.setLocalDescription({ type: 'rollback' });
+        }
       }
-      // Polite peer rolls back local description to accept remote offer
-      await pc.setLocalDescription({ type: 'rollback' });
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // Process any queued ICE candidates
+      await this.processQueuedCandidates(remoteParticipantId, pc);
+
+      // Create and send answer if in appropriate signaling state
+      if (pc.signalingState === 'have-remote-offer') {
+        const answer = await pc.createAnswer();
+        if (pc.signalingState === 'have-remote-offer') {
+          await pc.setLocalDescription(answer);
+          this.signaling.sendAnswer(remoteParticipantId, answer);
+        }
+      }
+    } catch (err) {
+      console.warn(`[WebRTC] Safe handled offer negotiation for peer ${remoteParticipantId}:`, err);
     }
-
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-
-    // Process any queued ICE candidates
-    await this.processQueuedCandidates(remoteParticipantId, pc);
-
-    // Create and send answer
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    this.signaling.sendAnswer(remoteParticipantId, answer);
   }
 
   public async handleAnswer(
     remoteParticipantId: string,
     answer: RTCSessionDescriptionInit
   ): Promise<void> {
-    const pc = this.peerConnections.get(remoteParticipantId);
-    if (!pc) return;
+    try {
+      const pc = this.peerConnections.get(remoteParticipantId);
+      if (!pc) return;
 
-    if (pc.signalingState === 'have-local-offer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      await this.processQueuedCandidates(remoteParticipantId, pc);
+      if (pc.signalingState === 'have-local-offer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await this.processQueuedCandidates(remoteParticipantId, pc);
+      }
+    } catch (err) {
+      console.warn(`[WebRTC] Safe handled answer negotiation for peer ${remoteParticipantId}:`, err);
     }
   }
 

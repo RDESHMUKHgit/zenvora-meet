@@ -38,3 +38,4 @@ export const ReadReceipt: React.FC<ReadReceiptProps> = ({ status = 'sent', isRea
     </span>
   );
 };
+

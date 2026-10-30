@@ -63,3 +63,4 @@ export function isConsecutiveMessage(
     return false;
   }
 }
+

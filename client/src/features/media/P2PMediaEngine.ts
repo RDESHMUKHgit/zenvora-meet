@@ -320,7 +320,11 @@ export class P2PMediaEngine extends MediaEngine {
     offer: RTCSessionDescriptionInit
   ): Promise<void> {
     if (!this.peerManager) return;
-    await this.peerManager.handleOffer(senderId, offer, this.localStream);
+    try {
+      await this.peerManager.handleOffer(senderId, offer, this.localStream);
+    } catch (err) {
+      console.warn(`[MediaEngine] Handled signal offer error from ${senderId}:`, err);
+    }
   }
 
   public async handleSignalAnswer(
@@ -328,7 +332,11 @@ export class P2PMediaEngine extends MediaEngine {
     answer: RTCSessionDescriptionInit
   ): Promise<void> {
     if (!this.peerManager) return;
-    await this.peerManager.handleAnswer(senderId, answer);
+    try {
+      await this.peerManager.handleAnswer(senderId, answer);
+    } catch (err) {
+      console.warn(`[MediaEngine] Handled signal answer error from ${senderId}:`, err);
+    }
   }
 
   public async handleSignalIceCandidate(
@@ -336,7 +344,11 @@ export class P2PMediaEngine extends MediaEngine {
     candidate: RTCIceCandidateInit
   ): Promise<void> {
     if (!this.peerManager) return;
-    await this.peerManager.handleIceCandidate(senderId, candidate);
+    try {
+      await this.peerManager.handleIceCandidate(senderId, candidate);
+    } catch (err) {
+      console.warn(`[MediaEngine] Handled ICE candidate error from ${senderId}:`, err);
+    }
   }
 
   public handlePeerMediaUpdated(
