@@ -15,6 +15,8 @@ export const setCsrfCookie = (res: Response, token?: string): string => {
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
+  res.setHeader(CSRF_HEADER_NAME, csrfToken);
+  res.setHeader('X-CSRF-Token', csrfToken);
   return csrfToken;
 };
 
@@ -64,10 +66,15 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
   // 2. Double-Submit CSRF check for state-changing requests authenticated via session cookie
   const hasSessionCookie = !!(req.cookies && req.cookies.session_token);
   if (hasSessionCookie) {
-    const clientHeader = req.headers[CSRF_HEADER_NAME];
+    const rawHeader = req.headers[CSRF_HEADER_NAME] || req.headers['x-csrf-token'];
+    const clientHeader = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
     const cookieToken = req.cookies[CSRF_COOKIE_NAME];
 
-    if (!clientHeader || !cookieToken || clientHeader !== cookieToken) {
+    if (cookieToken && clientHeader) {
+      if (clientHeader !== cookieToken) {
+        throw new ForbiddenError('Invalid CSRF token');
+      }
+    } else if (cookieToken && !clientHeader) {
       throw new ForbiddenError('Invalid or missing CSRF token');
     }
   }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { UserProfile, UserStatus } from '../types';
 import { authApi } from '../services';
+import { setLocalCsrfToken } from '../services/api';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -24,6 +25,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const currentUser = await authApi.getMe();
       setUser(currentUser);
+      if (currentUser) {
+        authApi.getCsrf().then((token) => {
+          if (token) setLocalCsrfToken(token);
+        }).catch(() => {});
+      }
     } catch {
       setUser(null);
     } finally {
@@ -37,11 +43,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const result = await authApi.login({ email, password });
+    if (result.csrfToken) {
+      setLocalCsrfToken(result.csrfToken);
+    }
     setUser(result.user);
   };
 
   const register = async (name: string, email: string, password: string) => {
     const result = await authApi.register({ name, email, password });
+    if (result.csrfToken) {
+      setLocalCsrfToken(result.csrfToken);
+    }
     setUser(result.user);
   };
 

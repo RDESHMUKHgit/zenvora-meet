@@ -63,6 +63,12 @@ export const createApp = (): Express => {
         'X-Host-Token',
         'x-host-token',
       ],
+      exposedHeaders: [
+        'X-CSRF-Token',
+        'x-csrf-token',
+        'X-Host-Token',
+        'x-host-token',
+      ],
     }),
   );
 
