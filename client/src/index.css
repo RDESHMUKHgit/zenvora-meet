@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  background-color: #fafbfc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar refinement */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Strict Design Rule: Never use translate-based hover animations */
+a:hover,
+button:hover,
+.ant-btn:hover,
+.ant-card:hover,
+.interactive-card:hover {
+  transform: none !important;
+}
+
+/* Clean transitions only on colors and backgrounds */
+button,
+a,
+input,
+select,
+.ant-btn,
+.ant-card,
+.ant-input {
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* Subtle background pattern container */
+.app-bg-wrapper {
+  position: relative;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0fdf9 0%, #ffffff 50%, #eff6ff 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Outline decorative layer */
+.decorative-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.decorative-icon {
+  position: absolute;
+  stroke: rgba(15, 23, 42, 0.04);
+  fill: none;
+  stroke-width: 1.25;
+}
+
+/* Responsive container wrapper */
+.page-container {
+  max-width: 1160px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 20px;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px 14px;
+  }
+}

@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI Architecture Dimensional Drawings · Apple-Style Engineering Redlines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&display=swap">
+<style>
+/* Layout: Monochrome Apple-style engineering dimensional drawings for UI architecture review */
+:root {
+  --paper: #f0f0f0;
+  --sheet: #ffffff;
+  --ink: #111111;
+  --ink2: #444444;
+  --ink3: #777777;
+  --fill: #f5f5f5;
+  --fill2: #e8e8e8;
+  --fill3: #dddddd;
+  --f: 'Arimo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1760px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+/* Title Block */
+.tb {
+  background: var(--sheet);
+  border: 1.2px solid var(--ink);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.tb-top {
+  display: grid;
+  grid-template-columns: 2.4fr 1fr 1fr 1fr 1fr;
+  border-bottom: 0.8px solid var(--ink);
+}
+.tb-cell {
+  padding: 10px 14px;
+  border-right: 0.8px solid var(--ink);
+}
+.tb-cell:last-child { border-right: none; }
+.lbl {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink3);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.v {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.tb-main h1 {
+  font-size: clamp(24px, 3.2vw, 36px);
+  margin: 2px 0 6px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tb-main .desc {
+  font-size: 11.5px;
+  color: var(--ink2);
+  line-height: 1.5;
+  text-transform: none;
+}
+.notes-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 0.8px solid var(--ink);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.notes-col ol { margin: 4px 0 0; padding-left: 18px; }
+.nh { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.nh span { font-weight: 400; color: var(--ink2); margin-left: 6px; }
+.figs-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 8px 16px;
+  gap: 10px;
+}
+.fig-item { border-left: 0.8px solid var(--ink); padding-left: 10px; }
+.fig-item:first-child { border-left: none; padding-left: 0; }
+.fig-val { font-size: 16px; font-weight: 700; margin-top: 2px; }
+
+/* Sheet Selector */
+.tabs-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 0 16px;
+  margin-bottom: 4px;
+}
+.tab-btn {
+  background: var(--sheet);
+  border: 1px solid var(--ink);
+  padding: 8px 14px;
+  font-size: 11.5px;
+  font-family: var(--f);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.tab-btn.active {
+  background: var(--ink);
+  color: var(--sheet);
+}
+.tab-btn:hover:not(.active) {
+  background: var(--fill2);
+}
+
+/* Drawing Canvas & Frame */
+.sheetwrap {
+  margin-bottom: 24px;
+  background: var(--sheet);
+  border: 1.2px solid var(--ink);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.scroll-canvas {
+  overflow-x: auto;
+  width: 100%;
+}
+svg {
+  display: block;
+  width: 100%;
+  min-width: 1200px;
+  height: auto;
+}
+.foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--fill);
+  border-top: 0.8px solid var(--ink);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+.foot b { color: var(--ink); }
+
+/* SVG Styles */
+.border { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+.obj { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+.well { fill: var(--fill); stroke: var(--ink); stroke-width: 1; }
+.slot { fill: none; stroke: var(--ink2); stroke-width: 0.9; stroke-dasharray: 4 3; }
+.hug { fill: var(--fill2); stroke: var(--ink); stroke-width: 1; }
+.thin { fill: none; stroke: var(--ink); stroke-width: 0.8; }
+.ph { fill: none; stroke: var(--ink3); stroke-width: 0.8; stroke-dasharray: 12 3 3 3; }
+.cl { fill: none; stroke: var(--ink3); stroke-width: 0.7; stroke-dasharray: 16 3 2 3; }
+.cut { stroke: var(--ink); stroke-width: 2; }
+.dl { stroke: var(--ink); stroke-width: 0.7; fill: none; }
+.ext { stroke: var(--ink); stroke-width: 0.55; fill: none; }
+.arrow { fill: var(--ink); }
+.hl { stroke: var(--ink2); stroke-width: 0.7; }
+.env { fill: none; stroke: var(--ink); stroke-width: 0.8; stroke-dasharray: 8 3 2 3; }
+.dt { font: 400 11px var(--f); fill: var(--ink); paint-order: stroke; stroke: var(--sheet); stroke-width: 3.5px; stroke-linejoin: round; }
+.dts { font: 400 9.5px var(--f); fill: var(--ink2); letter-spacing: 0.06em; text-transform: uppercase; paint-order: stroke; stroke: var(--sheet); stroke-width: 3px; }
+.sl { font: 600 9px var(--f); fill: var(--ink2); letter-spacing: 0.08em; text-transform: uppercase; }
+.nt { font: 400 11.5px var(--f); fill: var(--ink); letter-spacing: 0.05em; }
+.nth { font: 700 12.5px var(--f); fill: var(--ink); letter-spacing: 0.06em; text-transform: uppercase; }
+.vt { font: 700 12px var(--f); fill: var(--ink); letter-spacing: 0.08em; text-transform: uppercase; }
+.vtb { font: 700 18px var(--f); fill: var(--ink); letter-spacing: 0.06em; text-transform: uppercase; }
+.nb { fill: var(--sheet); stroke: var(--ink); stroke-width: 0.9; }
+.nbt { font: 700 9.5px var(--f); fill: var(--ink); }
+.lead { stroke: var(--ink); stroke-width: 0.7; fill: none; }
+.dot { fill: var(--ink); }
+.th { font: 700 10px var(--f); fill: var(--ink); letter-spacing: 0.05em; text-transform: uppercase; }
+.tc { font: 400 10px var(--f); fill: var(--ink); font-variant-numeric: tabular-nums; }
+.tbk { font: 400 7.5px var(--f); fill: var(--ink2); letter-spacing: 0.04em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Apple-Style Monochrome Title Block -->
+  <header class="tb">
+    <div class="tb-top">
+      <div class="tb-cell tb-main">
+        <div class="lbl">UI Component Reference · Dimensional Drawing Review</div>
+        <h1 id="tbSheetTitle">01 · Homepage Layout</h1>
+        <div class="desc" id="tbSheetDesc">Architecture only: slot allocation, layout bounds, responsive containers, control anatomy and spacing variables. Real content, brand copy and color are excluded.</div>
+      </div>
+      <div class="tb-cell">
+        <div class="lbl">DWG NO.</div>
+        <div class="v" id="tbDwgNo">UI-LAYOUT-HOME</div>
+      </div>
+      <div class="tb-cell">
+        <div class="lbl">REV</div>
+        <div class="v">1.0 · PROD</div>
+      </div>
+      <div class="tb-cell">
+        <div class="lbl">SHEETS</div>
+        <div class="v">9 OF 9</div>
+      </div>
+      <div class="tb-cell">
+        <div class="lbl">UNITS / SCALE</div>
+        <div class="v">CSS PX @ 1X / REF</div>
+      </div>
+    </div>
+
+    <div class="notes-row">
+      <div class="notes-col">
+        <div class="nh">NOTES: <span>(UNLESS OTHERWISE SPECIFIED)</span></div>
+        <ol>
+          <li>Do not scale from screen. Read dimensional variable tables and callouts.</li>
+          <li>All dimensions in CSS px at 1× viewport rendering. Inset padding measured within 1 px borders.</li>
+          <li>Slots (dashed rectangles) are structural placeholders. Text length, typography styling, and branding are out of scope.</li>
+        </ol>
+      </div>
+      <div class="notes-col">
+        <div class="nh" aria-hidden="true">&nbsp;</div>
+        <ol start="4">
+          <li>Every dimension is a codified variable (S1, H1, W1, R1...). Derived values are specified as strict formulas.</li>
+          <li>HUG = sized by intrinsic content · FLEX = expands to occupy available space · FILL = expands to 100% parent dimension.</li>
+          <li>[TBD] = dynamic viewport or runtime constraint. Monochrome drawing only; actual app implements light blue/mint-green theme.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="figs-row" id="tbFigs">
+      <!-- Injected per sheet -->
+    </div>
+  </header>
+
+  <!-- Navigation Sheet Tabs -->
+  <nav class="tabs-bar" id="tabsBar">
+    <button class="tab-btn active" onclick="switchSheet(0)">1. Home Layout</button>
+    <button class="tab-btn" onclick="switchSheet(1)">2. Create Dialog</button>
+    <button class="tab-btn" onclick="switchSheet(2)">3. Join Form</button>
+    <button class="tab-btn" onclick="switchSheet(3)">4. Room Layout</button>
+    <button class="tab-btn" onclick="switchSheet(4)">5. Video Grid</button>
+    <button class="tab-btn" onclick="switchSheet(5)">6. Chat Panel</button>
+    <button class="tab-btn" onclick="switchSheet(6)">7. Participants Sidebar</button>
+    <button class="tab-btn" onclick="switchSheet(7)">8. File Preview</button>
+    <button class="tab-btn" onclick="switchSheet(8)">9. Auth Forms</button>
+  </nav>
+
+  <!-- Drawing Sheet Display Area -->
+  <div class="sheetwrap">
+    <div class="scroll-canvas">
+      <svg id="drawingSvg" viewBox="0 0 1700 1060" role="img" aria-label="Dimensional Drawing Architecture Sheet"></svg>
+    </div>
+    <div class="foot">
+      <span>2026-10-30 &nbsp;|&nbsp; FULL-STACK ARCHITECTURE SPECIFICATION</span>
+      <span id="footSheetInfo"><b>UI-LAYOUT-HOME</b> &nbsp;|&nbsp; SHEET 1 OF 9</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/**
+ * DIMENSIONAL DRAWING ENGINE
+ * Pure monochrome vector redline renderer adhering to enesozturk/dimensional-drawing standard
+ */
+(function() {
+  const NS = 'http://www.w3.org/2000/svg';
+  let sv, A, HAT, uid = 0;
+
+  function mk(t, a, p) {
+    const e = document.createElementNS(NS, t);
+    for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]);
+    (p || sv).appendChild(e);
+    return e;
+  }
+  function tx(x, y, s, c, a, p) {
+    const t = mk('text', Object.assign({ x, y, class: c || 'dt' }, a || {}), p);
+    t.textContent = s;
+    return t;
+  }
+  function begin(id) {
+    sv = document.getElementById(id);
+    sv.innerHTML = '';
+    const n = uid++;
+    const d = mk('defs', {});
+    const m = mk('marker', {
+      id: 'ar' + n,
+      viewBox: '0 0 10 10',
+      refX: 10,
+      refY: 5,
+      markerWidth: 7,
+      markerHeight: 7,
+      orient: 'auto-start-reverse',
+      markerUnits: 'userSpaceOnUse'
+    }, d);
+    mk('path', { d: 'M0,1.7 L10,5 L0,8.3 z', class: 'arrow' }, m);
+
+    const pt = mk('pattern', {
+      id: 'hat' + n,
+      width: 6,
+      height: 6,
+      patternUnits: 'userSpaceOnUse',
+      patternTransform: 'rotate(45)'
+    }, d);
+    mk('line', { x1: 0, y1: 0, x2: 0, y2: 6, class: 'hl' }, pt);
+
+    A = 'url(#ar' + n + ')';
+    HAT = 'url(#hat' + n + ')';
+    rr(20, 20, 1660, 1020, 16, 'border');
+  }
+
+  function dimH(x1, x2, y, e1, e2, l, o) {
+    o = o || {};
+    [[x1, e1], [x2, e2]].forEach(([x, e]) => {
+      if (e == null) return;
+      const s = Math.sign(y - e) || 1;
+      mk('line', { x1: x, y1: e + s * 3, x2: x, y2: y + s * 5, class: 'ext' });
+    });
+    if (x2 - x1 >= 28) {
+      mk('line', { x1: x1, y1: y, x2: x2, y2: y, class: 'dl', 'marker-start': A, 'marker-end': A });
+    } else {
+      mk('line', { x1: x1 - 13, y1: y, x2: x1, y2: y, class: 'dl', 'marker-end': A });
+      mk('line', { x1: x2 + 13, y1: y, x2: x2, y2: y, class: 'dl', 'marker-end': A });
+      mk('line', { x1: x1, y1: y, x2: x2, y2: y, class: 'dl' });
+    }
+    tx((x1 + x2) / 2 + (o.dx || 0), (o.below ? y + 13 : y - 4) + (o.dy || 0), l, o.c || 'dt', { 'text-anchor': 'middle' });
+  }
+
+  function dimV(y1, y2, x, e1, e2, l, o) {
+    o = o || {};
+    [[y1, e1], [y2, e2]].forEach(([y, e]) => {
+      if (e == null) return;
+      const s = Math.sign(x - e) || 1;
+      mk('line', { x1: e + s * 3, y1: y, x2: x + s * 5, y2: y, class: 'ext' });
+    });
+    if (y2 - y1 >= 28) {
+      mk('line', { x1: x, y1: y1, x2: x, y2: y2, class: 'dl', 'marker-start': A, 'marker-end': A });
+    } else {
+      mk('line', { x1: x, y1: y1 - 13, x2: x, y2: y1, class: 'dl', 'marker-end': A });
+      mk('line', { x1: x, y1: y2 + 13, x2: x, y2: y2, class: 'dl', 'marker-end': A });
+      mk('line', { x1: x, y1: y1, x2: x, y2: y2, class: 'dl' });
+    }
+    const c = (y1 + y2) / 2;
+    if (o.side) {
+      const r = o.side === 'r';
+      tx(r ? x + 6 : x - 6, c + 4, l, o.c || 'dt', { 'text-anchor': r ? 'start' : 'end' });
+    } else {
+      tx(x - 5, c, l, o.c || 'dt', { 'text-anchor': 'middle', transform: 'rotate(-90 ' + (x - 5) + ' ' + c + ')' });
+    }
+  }
+
+  function callout(px, py, ex, ey, l, dir, c) {
+    const s = dir || (ex >= px ? 1 : -1);
+    mk('circle', { cx: px, cy: py, r: 1.8, class: 'dot' });
+    mk('polyline', { points: px + ',' + py + ' ' + ex + ',' + ey + ' ' + (ex + s * 12) + ',' + ey, class: 'lead' });
+    tx(ex + s * 16, ey + 4, l, c || 'dt', { 'text-anchor': s > 0 ? 'start' : 'end' });
+  }
+
+  function rad(cx, cy, r, c, l, L) {
+    const sx = c.includes('l') ? -1 : 1, sy = c.includes('t') ? -1 : 1;
+    const ox = cx - sx * r, oy = cy - sy * r;
+    const px = ox + sx * r * Math.SQRT1_2, py = oy + sy * r * Math.SQRT1_2;
+    callout(px, py, px + sx * L, py + sy * L, l, sx);
+  }
+
+  function nb(x, y, n) {
+    mk('rect', { x: x - 6, y: y - 6, width: 12, height: 12, class: 'nb' });
+    tx(x, y + 3.5, String(n), 'nbt', { 'text-anchor': 'middle' });
+  }
+
+  function rr(x, y, w, h, r, c) { return mk('rect', { x, y, width: w, height: h, rx: r, class: c }); }
+
+  function slot(x, y, w, h, l, sub) {
+    rr(x, y, w, h, 4, 'slot');
+    tx(x + w / 2, y + h / 2 - (sub ? 4 : 0) + 3, l, 'sl', { 'text-anchor': 'middle' });
+    if (sub) tx(x + w / 2, y + h / 2 + 10, sub, 'dts', { 'text-anchor': 'middle' });
+  }
+
+  function table(x, y, ttl, rows) {
+    const ws = [44, 94, 98], rh = 18;
+    tx(x, y - 8, ttl, 'vt');
+    const all = [['Code', 'Variable', 'Value']].concat(rows);
+    all.forEach((r, i) => {
+      let cx = x;
+      r.forEach((c, j) => {
+        mk('rect', { x: cx, y: y + i * rh, width: ws[j], height: rh, class: 'thin' });
+        tx(cx + (j ? ws[j] / 2 : 6), y + i * rh + 12.5, c, i ? 'tc' : 'th', { 'text-anchor': j ? 'middle' : 'start' });
+        cx += ws[j];
+      });
+    });
+    return y + all.length * rh + 32;
+  }
+
+  function detailRef(cx, cy, r, lbl, lx, ly) {
+    mk('circle', { cx, cy, r, class: 'ph' });
+    const a = Math.atan2(ly - cy, lx - cx);
+    mk('line', { x1: cx + r * Math.cos(a), y1: cy + r * Math.sin(a), x2: lx, y2: ly, class: 'lead' });
+    tx(lx + (lx < cx ? -4 : 4), ly + 4, lbl, 'dts', { 'text-anchor': lx < cx ? 'end' : 'start' });
+  }
+
+  // --- 9 Architectural Drawing Sheets Definition ---
+  const sheets = [
+    // 01: Homepage Layout
+    {
+      id: 'UI-LAYOUT-HOME',
+      title: '01 · Homepage Layout Architecture',
+      desc: 'Top header bar (H1), hero CTA zone (H2), split interactive action panel (W2/W3) and meeting history container (H4).',
+      figs: [
+        { lbl: 'W · max-w', val: '1280 max' },
+        { lbl: 'H1 · nav-h', val: '64 fixed' },
+        { lbl: 'S1 · page-pad', val: '24' },
+        { lbl: 'S2 · hero-gap', val: '32' },
+        { lbl: 'H3 · act-h', val: '180' },
+        { lbl: 'R1 · r-card', val: '12' },
+        { lbl: 'W2 · create-w', val: 'FLEX 1' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        // Notes top-left
+        tx(50, 56, 'NOTES: HOMEPAGE VIEWPORT ARCHITECTURE', 'nth');
+        [
+          [1, 'Top navigation bar fixed at H1=64px, spans 100% viewport, content centered within max W1.'],
+          [2, 'Hero section provides responsive flex columns with dual action slots: Create (W2) and Join (W3).'],
+          [3, 'Meeting history container renders dynamic query data or verified Empty state, never mock data.'],
+          [4, 'Clock slot utilizes Temporal API with live instant tick updates.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // Main Viewport Outline
+        const VX = 60, VY = 200, VW = 1040, VH = 780;
+        rr(VX, VY, VW, VH, 12, 'obj');
+        tx(VX + 14, VY + 20, 'VIEWPORT · DESKTOP REF [1280×800]', 'dts');
+
+        // Top Navigation Bar
+        const NY = VY + 30, NH = 54;
+        rr(VX, NY, VW, NH, 0, 'well');
+        slot(VX + 24, NY + 10, 140, 34, 'LOGO SLOT · HUG');
+        slot(VX + 200, NY + 10, 360, 34, 'NAV LINKS · FLEX');
+        slot(VX + VW - 240, NY + 10, 120, 34, 'CLOCK SLOT · HUG');
+        slot(VX + VW - 100, NY + 10, 80, 34, 'USER / AUTH · HUG');
+
+        // Dims for Nav
+        dimH(VX, VX + VW, NY - 14, null, null, 'W1 · max-w = 1280');
+        dimV(NY, NY + NH, VX + VW + 16, NY, NY + NH, 'H1 = 64');
+
+        // Hero Section
+        const HY = NY + NH + 24;
+        slot(VX + 40, HY, VW - 80, 80, 'HERO HEADLINE & DESCRIPTION SLOT · FILL');
+        dimV(HY, HY + 80, VX + VW + 16, HY, HY + 80, 'H2 · hero-h = 80');
+
+        // Action Split Zone (Create & Join)
+        const AY = HY + 104, AH = 180;
+        const CW = (VW - 80 - 24) / 2;
+        // Create Meeting Card
+        rr(VX + 40, AY, CW, AH, 12, 'well');
+        tx(VX + 54, AY + 22, 'CREATE MEETING CARD [W2]', 'dts');
+        slot(VX + 56, AY + 36, CW - 32, 40, 'HEADER & ICON SLOT');
+        slot(VX + 56, AY + 88, CW - 32, 38, 'NEW MEETING ACTION BUTTON · PRIMARY');
+        slot(VX + 56, AY + 136, CW - 32, 28, 'SECONDARY INSTANT TOGGLES');
+
+        // Join Meeting Card
+        rr(VX + 40 + CW + 24, AY, CW, AH, 12, 'well');
+        tx(VX + 54 + CW + 24, AY + 22, 'JOIN MEETING CARD [W3]', 'dts');
+        slot(VX + 56 + CW + 24, AY + 36, (CW - 32) * 0.6, 40, 'MEETING ID INPUT SLOT');
+        slot(VX + 56 + CW + 24 + (CW - 32) * 0.64, AY + 36, (CW - 32) * 0.36, 40, 'NAME INPUT');
+        slot(VX + 56 + CW + 24, AY + 88, CW - 32, 38, 'JOIN ACTION BUTTON');
+        slot(VX + 56 + CW + 24, AY + 136, CW - 32, 28, 'VALIDATION & STATUS SLOT');
+
+        dimH(VX + 40, VX + 40 + CW, AY + AH + 16, AY + AH, AY + AH, 'W2 = (W-S)/2', { below: true });
+        dimH(VX + 40 + CW, VX + 40 + CW + 24, AY + AH + 16, AY + AH, AY + AH, 'S3=24', { below: true });
+        dimH(VX + 40 + CW + 24, VX + VW - 40, AY + AH + 16, AY + AH, AY + AH, 'W3 = (W-S)/2', { below: true });
+        dimV(AY, AY + AH, VX + VW + 16, AY, AY + AH, 'H3 · act-h = 180');
+
+        // Recent Meeting History Section
+        const MY = AY + AH + 42, MH = 260;
+        rr(VX + 40, MY, VW - 80, MH, 12, 'well');
+        tx(VX + 54, MY + 22, 'RECENT MEETINGS REAL DATA CONTAINER', 'dts');
+        slot(VX + 56, MY + 34, VW - 112, 40, 'HEADER & SEARCH FILTER BAR · FLEX');
+        slot(VX + 56, MY + 84, VW - 112, 150, 'HISTORY ROWS (IF PRESENT) OR EMPTY STATE · REAL DB DATA');
+
+        dimV(MY, MY + MH, VX + VW + 16, MY, MY + MH, 'H4 · hist-h = 260');
+
+        // Exploded / Detail callouts
+        rad(VX + 40, AY, 12, 'tl', 'R1 = 12', 24);
+        detailRef(VX + 56 + CW + 24, AY + 36, 20, 'DETAIL A: INPUT ATOM', 1140, 180);
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'SPACING VARIABLES', [
+          ['S1', 'page-pad', '24 px'],
+          ['S2', 'hero-gap', '32 px'],
+          ['S3', 'col-gap', '24 px'],
+          ['S4', 'card-pad', '16 px'],
+          ['S5', 'item-gap', '12 px']
+        ]);
+        ty = table(1180, ty, 'SIZE VARIABLES', [
+          ['W1', 'max-width', '1280 px'],
+          ['H1', 'nav-height', '64 px'],
+          ['H2', 'hero-height', '80 px'],
+          ['H3', 'action-card-h', '180 px'],
+          ['H4', 'history-h', '260 px']
+        ]);
+        ty = table(1180, ty, 'RADII & ELEVATION', [
+          ['R1', 'card-radius', '12 px'],
+          ['R2', 'button-radius', '8 px'],
+          ['R3', 'input-radius', '6 px'],
+          ['B1', 'border-weight', '1 px']
+        ]);
+      }
+    },
+
+    // 02: Create Meeting Dialog
+    {
+      id: 'UI-MODAL-CREATE-MEET',
+      title: '02 · Create Meeting Modal Architecture',
+      desc: 'Centered modal sheet with header slot, form controls stack (title input, ephemeral switch), actions bar and scrim.',
+      figs: [
+        { lbl: 'W · modal-w', val: '480 fixed' },
+        { lbl: 'H · modal-min', val: '320 min' },
+        { lbl: 'S1 · pad', val: '24' },
+        { lbl: 'H3 · input-h', val: '40' },
+        { lbl: 'H4 · btn-h', val: '40' },
+        { lbl: 'R1 · r-modal', val: '16' },
+        { lbl: 'R2 · r-ctrl', val: '8' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: CREATE MEETING MODAL ARCHITECTURE', 'nth');
+        [
+          [1, 'Centered on viewport axes with fixed backdrop scrim at 45% opacity gray.'],
+          [2, 'Form fields: Title input with Zod validation, Ephemeral checkbox with security notice.'],
+          [3, 'Submits directly to backend POST /api/meetings; generates collision-free rdm-xxx-xxx room code.'],
+          [4, 'Footer hugs secondary cancel action and primary confirm creation button.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // Viewport & Scrim
+        const VX = 60, VY = 200, VW = 1040, VH = 780;
+        rr(VX, VY, VW, VH, 12, 'obj');
+        tx(VX + 14, VY + 20, 'VIEWPORT OVERLAY & SCRIM [100VH × 100VW]', 'dts');
+        mk('rect', { x: VX, y: VY, width: VW, height: VH, fill: HAT, class: 'thin' });
+
+        // Modal Window
+        const MW = 480, MH = 380;
+        const MX = VX + (VW - MW) / 2, MY = VY + (VH - MH) / 2;
+        rr(MX, MY, MW, MH, 16, 'obj');
+
+        // Modal Header
+        const MHY = MY + 20;
+        slot(MX + 24, MHY, MW - 84, 28, 'TITLE SLOT: "CREATE NEW MEETING" · FLEX');
+        slot(MX + MW - 48, MHY, 28, 28, 'CLOSE BTN · HUG');
+        dimH(MX, MX + MW, MY - 16, null, null, 'W · modal-w = 480');
+        dimV(MY, MY + 56, MX - 16, MY, MY + 56, 'H1 · header-h = 56');
+
+        // Form Fields
+        const FY = MY + 72;
+        slot(MX + 24, FY, MW - 48, 18, 'LABEL SLOT: "MEETING TOPIC" · HUG');
+        slot(MX + 24, FY + 24, MW - 48, 40, 'INPUT SLOT: TITLE [H3=40] · FILL');
+
+        const SY = FY + 80;
+        slot(MX + 24, SY, MW - 48, 18, 'LABEL SLOT: "ROOM PERSISTENCE" · HUG');
+        slot(MX + 24, SY + 24, MW - 48, 48, 'SWITCH / CHECKBOX ROW: EPHEMERAL MEETING · FILL');
+
+        const NY2 = SY + 86;
+        slot(MX + 24, NY2, MW - 48, 42, 'META INFO SLOT: TEMPORAL EXPIRY WARNING · FILL');
+
+        // Modal Footer Actions
+        const FOY = MY + MH - 64;
+        mk('line', { x1: MX, y1: FOY, x2: MX + MW, y2: FOY, class: 'thin' });
+        slot(MX + MW - 210, FOY + 14, 90, 36, 'CANCEL · HUG');
+        slot(MX + MW - 110, FOY + 14, 86, 36, 'CREATE · HUG');
+        dimV(FOY, MY + MH, MX + MW + 16, FOY, MY + MH, 'H2 · footer-h = 64');
+
+        // Rad callouts
+        rad(MX, MY, 16, 'tl', 'R1 · modal = 16', 28);
+        rad(MX + 24, FY + 24, 8, 'tl', 'R2 · input = 8', 18);
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'MODAL SPACING', [
+          ['S1', 'modal-padding', '24 px'],
+          ['S2', 'field-gap', '18 px'],
+          ['S3', 'label-gap', '6 px'],
+          ['S4', 'footer-gap', '12 px']
+        ]);
+        ty = table(1180, ty, 'MODAL SIZING', [
+          ['W1', 'modal-width', '480 px'],
+          ['H1', 'header-h', '56 px'],
+          ['H2', 'footer-h', '64 px'],
+          ['H3', 'input-height', '40 px'],
+          ['H4', 'action-height', '36 px']
+        ]);
+        ty = table(1180, ty, 'Z-INDEX & ELEVATION', [
+          ['Z1', 'scrim-z', '1000'],
+          ['Z2', 'modal-z', '1001'],
+          ['R1', 'modal-radius', '16 px'],
+          ['R2', 'control-radius', '8 px']
+        ]);
+      }
+    },
+
+    // 03: Join Meeting Form
+    {
+      id: 'UI-FORM-JOIN-MEET',
+      title: '03 · Join Meeting Form Architecture',
+      desc: 'Form card anatomy for validating meeting room code, entering display name, toggle initial audio/video state, and submission.',
+      figs: [
+        { lbl: 'W · form-w', val: '440 fixed' },
+        { lbl: 'H · form-h', val: '390 fixed' },
+        { lbl: 'S1 · pad', val: '24' },
+        { lbl: 'H1 · input-h', val: '42' },
+        { lbl: 'H2 · btn-h', val: '44' },
+        { lbl: 'R1 · card-r', val: '12' },
+        { lbl: 'R2 · ctrl-r', val: '8' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: JOIN MEETING FORM ARCHITECTURE', 'nth');
+        [
+          [1, 'Code validation requires regex format rdm-xxx-xxx with automatic hyphenation.'],
+          [2, 'Display name field prepopulated for authenticated sessions; editable for guests.'],
+          [3, 'Hardware preference switches: Mic Mute, Video Off before room entry.'],
+          [4, 'Validates against real DB via GET /api/meetings/validate/:code; blocks invalid joins.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // Form Card Anatomy
+        const FX = 320, FY = 220, FW = 500, FH = 420;
+        rr(FX, FY, FW, FH, 14, 'obj');
+        tx(FX + 18, FY + 22, 'JOIN FORM CONTAINER · REF ANATOMY', 'dts');
+
+        dimH(FX, FX + FW, FY - 16, null, null, 'W · form-w = 500');
+        dimV(FY, FY + FH, FX - 18, FY, FY + FH, 'H · form-h = 420');
+
+        // Form Slots
+        const Y0 = FY + 38;
+        slot(FX + 24, Y0, FW - 48, 28, 'HEADER SLOT: "JOIN WITH CODE" · HUG');
+
+        const Y1 = Y0 + 42;
+        slot(FX + 24, Y1, FW - 48, 16, 'LABEL: MEETING CODE (RDM-XXX-XXX) · HUG');
+        slot(FX + 24, Y1 + 22, FW - 48, 42, 'INPUT SLOT: CODE WITH PREFIX ICON · FILL');
+
+        const Y2 = Y1 + 78;
+        slot(FX + 24, Y2, FW - 48, 16, 'LABEL: YOUR DISPLAY NAME · HUG');
+        slot(FX + 24, Y2 + 22, FW - 48, 42, 'INPUT SLOT: DISPLAY NAME · FILL');
+
+        const Y3 = Y2 + 78;
+        slot(FX + 24, Y3, (FW - 60) / 2, 38, 'SWITCH: MIC MUTED · HUG');
+        slot(FX + 24 + (FW - 60) / 2 + 12, Y3, (FW - 60) / 2, 38, 'SWITCH: CAM OFF · HUG');
+
+        const Y4 = Y3 + 52;
+        slot(FX + 24, Y4, FW - 48, 44, 'SUBMIT ACTION BUTTON: "JOIN MEETING" · FILL');
+
+        // Radius callouts
+        rad(FX, FY, 14, 'tl', 'R1 = 14', 24);
+        rad(FX + 24, Y1 + 22, 8, 'tl', 'R2 = 8', 16);
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'FORM SPACING', [
+          ['S1', 'inset-pad', '24 px'],
+          ['S2', 'row-gap', '18 px'],
+          ['S3', 'label-gap', '6 px'],
+          ['S4', 'toggle-gap', '12 px']
+        ]);
+        ty = table(1180, ty, 'FORM DIMENSIONS', [
+          ['W1', 'form-width', '500 px'],
+          ['H1', 'input-height', '42 px'],
+          ['H2', 'toggle-height', '38 px'],
+          ['H3', 'button-height', '44 px']
+        ]);
+        ty = table(1180, ty, 'VALIDATION TOKENS', [
+          ['V1', 'code-pattern', 'rdm-[a-z]{3}-[a-z]{3}'],
+          ['V2', 'name-min', '2 chars'],
+          ['V3', 'name-max', '40 chars']
+        ]);
+      }
+    },
+
+    // 04: Meeting Room Layout
+    {
+      id: 'UI-LAYOUT-ROOM',
+      title: '04 · Meeting Room Layout Architecture',
+      desc: 'Overall conference stage layout: top meeting status bar, main video stage, collapsible side dock and bottom control dock.',
+      figs: [
+        { lbl: 'W · screen-w', val: '100VW' },
+        { lbl: 'H · screen-h', val: '100VH' },
+        { lbl: 'H1 · top-h', val: '56' },
+        { lbl: 'H2 · ctrl-h', val: '72' },
+        { lbl: 'W2 · side-w', val: '340' },
+        { lbl: 'R1 · dock-r', val: '16' },
+        { lbl: 'S1 · gap', val: '12' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: MEETING ROOM STAGE ARCHITECTURE', 'nth');
+        [
+          [1, 'Full-viewport container utilizing CSS Grid / Flexbox with zero window overflow.'],
+          [2, 'Top bar houses Meeting Title, Room ID badge, live participant counter, and security indicator.'],
+          [3, 'Bottom dock floats above stage with Mic, Camera, Screen Share, Chat, and Leave controls.'],
+          [4, 'Side dock conditionally expands to W2=340px for Chat or Participants without occluding main stage.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // Stage Wireframe
+        const SX = 60, SY = 200, SW = 1040, SH = 780;
+        rr(SX, SY, SW, SH, 8, 'obj');
+
+        // Top Status Bar
+        const TH = 56;
+        rr(SX, SY, SW, TH, 0, 'well');
+        slot(SX + 16, SY + 12, 220, 32, 'MEETING TITLE SLOT · HUG');
+        slot(SX + 250, SY + 12, 110, 32, 'ROOM CODE PILL · HUG');
+        slot(SX + 370, SY + 12, 100, 32, 'DURATION CLOCK');
+        slot(SX + SW - 160, SY + 12, 144, 32, 'INVITE COPY & SECURE · HUG');
+
+        dimV(SY, SY + TH, SX - 16, SY, SY + TH, 'H1 = 56');
+
+        // Main Stage Area & Side Panel Split
+        const StageY = SY + TH + 8;
+        const SideW = 300;
+        const MainW = SW - SideW - 24;
+        const StageH = SH - TH - 96;
+
+        // Video Stage Box
+        rr(SX + 8, StageY, MainW, StageH, 10, 'well');
+        tx(SX + 20, StageY + 22, 'MAIN VIDEO STAGE [CONTENT SLOT · FILL]', 'dts');
+        slot(SX + 24, StageY + 36, MainW - 32, StageH - 48, 'PARTICIPANT VIDEO GRID [VIEW DETAIL 05]');
+
+        dimH(SX + 8, SX + 8 + MainW, StageY - 10, null, null, 'W1 · stage-w = FLEX');
+
+        // Collapsible Side Dock
+        rr(SX + 8 + MainW + 8, StageY, SideW, StageH, 10, 'well');
+        tx(SX + 8 + MainW + 20, StageY + 22, 'SIDE DOCK [CHAT / ROSTER]', 'dts');
+        slot(SX + 8 + MainW + 16, StageY + 36, SideW - 16, StageH - 48, 'TABBED PANEL SLOT [VIEW DETAILS 06 & 07]');
+
+        dimH(SX + 8 + MainW + 8, SX + SW - 8, StageY - 10, null, null, 'W2 · side-w = 340');
+
+        // Floating Bottom Control Dock
+        const DockW = 540, DockH = 58;
+        const DockX = SX + (MainW - DockW) / 2 + 8, DockY = SY + SH - 72;
+        rr(DockX, DockY, DockW, DockH, 29, 'obj');
+
+        const btnW = 42, btnGap = 10;
+        let bx = DockX + 20;
+        ['MIC', 'CAM', 'SHARE', 'CHAT', 'USERS', 'SET', 'LEAVE'].forEach((b, i) => {
+          slot(bx, DockY + 8, i === 6 ? 64 : btnW, 42, b);
+          bx += (i === 6 ? 64 : btnW) + btnGap;
+        });
+
+        dimV(DockY, DockY + DockH, DockX - 16, DockY, DockY + DockH, 'H2 = 72');
+        rad(DockX, DockY, 29, 'tl', 'R1 = 29', 20);
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'STAGE GEOMETRY', [
+          ['H1', 'header-bar-h', '56 px'],
+          ['H2', 'control-dock-h', '72 px'],
+          ['W2', 'side-panel-w', '340 px'],
+          ['S1', 'stage-gutter', '12 px'],
+          ['R1', 'dock-radius', '29 px']
+        ]);
+        ty = table(1180, ty, 'DOCK BUTTON SIZING', [
+          ['Z1', 'circle-btn-d', '42 px'],
+          ['Z2', 'leave-btn-w', '64 px'],
+          ['S2', 'dock-item-gap', '10 px'],
+          ['S3', 'dock-pad-x', '20 px']
+        ]);
+      }
+    },
+
+    // 05: Participant Video Grid
+    {
+      id: 'UI-GRID-VIDEO',
+      title: '05 · Participant Video Grid Architecture',
+      desc: 'Dynamic responsive N-participant video tile grid with 16:9 ratio locks, participant name tag, audio indicator, and empty avatar slot.',
+      figs: [
+        { lbl: 'AR · aspect', val: '16:9' },
+        { lbl: 'G · tile-gap', val: '12' },
+        { lbl: 'R · tile-r', val: '10' },
+        { lbl: 'H1 · tag-h', val: '28' },
+        { lbl: 'Z1 · avatar-d', val: '64' },
+        { lbl: 'N · max-tiles', val: '25' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: VIDEO GRID ARCHITECTURE', 'nth');
+        [
+          [1, 'Calculates optimal column × row layout to maximize video surface within stage viewport.'],
+          [2, 'Each tile maintains strict 16:9 aspect ratio with CSS object-fit: cover.'],
+          [3, 'Floating name badge with mute status icon pinned to bottom-left inset (8px).'],
+          [4, 'Active speaker border highlight with 2px stroke, zero layout shifts.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // 4-Tile Grid Demonstration
+        const GX = 80, GY = 210, GW = 1000, GH = 640;
+        rr(GX, GY, GW, GH, 8, 'obj');
+        tx(GX + 16, GY + 20, 'GRID CONTAINER [ASPECT CONSTRAINED]', 'dts');
+
+        const colW = (GW - 48 - 16) / 2;
+        const rowH = (GH - 48 - 16) / 2;
+
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 2; c++) {
+            const tx0 = GX + 24 + c * (colW + 16);
+            const ty0 = GY + 24 + r * (rowH + 16);
+
+            rr(tx0, ty0, colW, rowH, 10, 'well');
+            tx(tx0 + 12, ty0 + 18, `TILE ${r * 2 + c + 1} [16:9 RATIO LOCK]`, 'dts');
+
+            // Avatar placeholder
+            mk('circle', { cx: tx0 + colW / 2, cy: ty0 + rowH / 2 - 8, r: 32, class: 'thin' });
+            slot(tx0 + colW / 2 - 30, ty0 + rowH / 2 - 14, 60, 20, 'AVATAR');
+
+            // Bottom Name Tag & Audio Status
+            rr(tx0 + 10, ty0 + rowH - 36, 150, 26, 6, 'obj');
+            slot(tx0 + 14, ty0 + rowH - 33, 110, 20, 'PARTICIPANT NAME');
+            slot(tx0 + 128, ty0 + rowH - 33, 26, 20, 'MIC');
+
+            if (r === 0 && c === 0) {
+              dimH(tx0, tx0 + colW, ty0 - 10, null, null, 'W · tile-w');
+              dimV(ty0, ty0 + rowH, tx0 - 10, ty0, ty0 + rowH, 'H · tile-h');
+              rad(tx0, ty0, 10, 'tl', 'R = 10', 16);
+            }
+          }
+        }
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'TILE DIMENSIONS', [
+          ['AR', 'aspect-ratio', '16:9'],
+          ['G1', 'tile-gap', '12 px'],
+          ['R1', 'tile-radius', '10 px'],
+          ['S1', 'inset-pad', '10 px'],
+          ['H1', 'badge-h', '26 px']
+        ]);
+        ty = table(1180, ty, 'RESPONSIVE BREAKS', [
+          ['1 Tile', '1 × 1', '100% stage'],
+          ['2 Tiles', '2 × 1 or 1 × 2', '50% stage'],
+          ['3-4 Tiles', '2 × 2 grid', '25% stage'],
+          ['5-9 Tiles', '3 × 3 grid', '11% stage']
+        ]);
+      }
+    },
+
+    // 06: Chat Panel
+    {
+      id: 'UI-PANEL-CHAT',
+      title: '06 · In-Meeting Chat Panel Architecture',
+      desc: 'Real-time conversation drawer: conversation header, message bubble scroll area, read indicators, and input composer with attachment slot.',
+      figs: [
+        { lbl: 'W · panel-w', val: '340 fixed' },
+        { lbl: 'H1 · head-h', val: '52' },
+        { lbl: 'H2 · comp-h', val: '64' },
+        { lbl: 'S1 · pad', val: '14' },
+        { lbl: 'R1 · msg-r', val: '12' },
+        { lbl: 'R2 · in-r', val: '8' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: CHAT PANEL ARCHITECTURE', 'nth');
+        [
+          [1, 'Real-time Socket.IO backed conversation channel; empty state displayed when no messages exist.'],
+          [2, 'Message bubbles differentiated by sender (incoming left-aligned, self right-aligned).'],
+          [3, 'Timestamp formatted using Temporal API with HH:mm localized format.'],
+          [4, 'Bottom composer includes text area, file attachment trigger, emoji button and send action.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // Chat Container
+        const CX = 360, CY = 200, CW = 360, CH = 740;
+        rr(CX, CY, CW, CH, 12, 'obj');
+
+        dimH(CX, CX + CW, CY - 16, null, null, 'W · panel-w = 340-360');
+        dimV(CY, CY + CH, CX - 18, CY, CY + CH, 'H · panel-h = FILL');
+
+        // Header
+        const HeadH = 52;
+        rr(CX, CY, CW, HeadH, 0, 'well');
+        slot(CX + 14, CY + 10, 160, 32, 'HEADER: "IN-CALL CHAT" · HUG');
+        slot(CX + CW - 42, CY + 10, 28, 32, 'CLOSE · HUG');
+        dimV(CY, CY + HeadH, CX + CW + 14, CY, CY + HeadH, 'H1 = 52');
+
+        // Message Thread (Scrollable)
+        const MY = CY + HeadH + 12;
+        // Message 1 (Incoming)
+        rr(CX + 14, MY, 230, 60, 10, 'well');
+        slot(CX + 22, MY + 8, 120, 14, 'SENDER · TIMESTAMP');
+        slot(CX + 22, MY + 26, 210, 24, 'MESSAGE CONTENT · FILL');
+
+        // Message 2 (Self / Outgoing)
+        const MY2 = MY + 76;
+        rr(CX + CW - 244, MY2, 230, 60, 10, 'obj');
+        slot(CX + CW - 236, MY2 + 8, 120, 14, 'YOU · TIMESTAMP');
+        slot(CX + CW - 236, MY2 + 26, 210, 24, 'MESSAGE CONTENT · FILL');
+
+        // Message 3 with Attachment
+        const MY3 = MY2 + 76;
+        rr(CX + 14, MY3, 260, 84, 10, 'well');
+        slot(CX + 22, MY3 + 8, 140, 14, 'SENDER · TIMESTAMP');
+        slot(CX + 22, MY3 + 26, 240, 48, 'ATTACHMENT PREVIEW SLOT [VIEW 08]');
+
+        // Empty state indicator
+        slot(CX + 20, MY3 + 120, CW - 40, 70, 'EMPTY STATE SLOT (WHEN ZERO MESSAGES) · REAL DB');
+
+        // Bottom Composer
+        const CompY = CY + CH - 80;
+        mk('line', { x1: CX, y1: CompY, x2: CX + CW, y2: CompY, class: 'thin' });
+        slot(CX + 14, CompY + 12, CW - 78, 54, 'TEXT INPUT COMPOSER · FILL');
+        slot(CX + CW - 56, CompY + 12, 42, 54, 'SEND BTN · HUG');
+        dimV(CompY, CY + CH, CX + CW + 14, CompY, CY + CH, 'H2 = 80');
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'CHAT SPACING', [
+          ['S1', 'inset-pad', '14 px'],
+          ['S2', 'bubble-gap', '12 px'],
+          ['H1', 'header-h', '52 px'],
+          ['H2', 'composer-h', '80 px'],
+          ['R1', 'bubble-radius', '10 px']
+        ]);
+        ty = table(1180, ty, 'MESSAGE SPEC', [
+          ['W1', 'max-bubble-w', '75% panel'],
+          ['F1', 'text-size', '13 px'],
+          ['F2', 'meta-size', '10 px']
+        ]);
+      }
+    },
+
+    // 07: Participant Sidebar
+    {
+      id: 'UI-PANEL-PARTICIPANTS',
+      title: '07 · Participant Roster Sidebar Architecture',
+      desc: 'Participant roster sidebar: search header, host action controls, participant row anatomy (avatar, role badge, mute/video status).',
+      figs: [
+        { lbl: 'W · panel-w', val: '340 fixed' },
+        { lbl: 'H1 · row-h', val: '48' },
+        { lbl: 'Z1 · av-d', val: '32' },
+        { lbl: 'S1 · pad', val: '12' },
+        { lbl: 'R1 · badge-r', val: '4' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: PARTICIPANT SIDEBAR ARCHITECTURE', 'nth');
+        [
+          [1, 'Roster dynamically populated via backend GET /api/meetings/:id/participants.'],
+          [2, 'Displays Host, Co-host and Participant role tags with distinct permissions.'],
+          [3, 'Host actions slot reveals "Mute All" and "Lock Meeting" for authorized callers.'],
+          [4, 'Real-time mute and video toggle indicators synced with media state.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // Sidebar Container
+        const PX = 360, PY = 200, PW = 360, PH = 740;
+        rr(PX, PY, PW, PH, 12, 'obj');
+
+        dimH(PX, PX + PW, PY - 16, null, null, 'W · panel-w = 340-360');
+        dimV(PY, PY + PH, PX - 18, PY, PY + PH, 'H · panel-h = FILL');
+
+        // Header & Search
+        const HeadH = 90;
+        rr(PX, PY, PW, HeadH, 0, 'well');
+        slot(PX + 14, PY + 10, 180, 26, 'TITLE: "PARTICIPANTS (N)" · HUG');
+        slot(PX + 14, PY + 44, PW - 28, 34, 'SEARCH PARTICIPANTS INPUT · FILL');
+        dimV(PY, PY + HeadH, PX + PW + 14, PY, PY + HeadH, 'H1 = 90');
+
+        // Participant Rows
+        const RY = PY + HeadH + 8;
+        const RowH = 50;
+
+        for (let i = 0; i < 4; i++) {
+          const y0 = RY + i * (RowH + 6);
+          rr(PX + 10, y0, PW - 20, RowH, 8, 'well');
+
+          // Avatar
+          mk('circle', { cx: PX + 32, cy: y0 + RowH / 2, r: 16, class: 'thin' });
+          slot(PX + 20, y0 + RowH / 2 - 8, 24, 16, 'AV');
+
+          // Name and Role
+          slot(PX + 58, y0 + 10, 120, 14, i === 0 ? 'USER (HOST)' : 'PARTICIPANT NAME');
+          slot(PX + 58, y0 + 26, 60, 14, i === 0 ? 'HOST BADGE' : 'GUEST');
+
+          // Controls (Mic & Cam)
+          slot(PX + PW - 76, y0 + 14, 24, 22, 'MIC');
+          slot(PX + PW - 46, y0 + 14, 24, 22, 'CAM');
+        }
+
+        // Host Control Footer
+        const FootY = PY + PH - 64;
+        mk('line', { x1: PX, y1: FootY, x2: PX + PW, y2: FootY, class: 'thin' });
+        slot(PX + 14, FootY + 14, (PW - 36) / 2, 36, 'MUTE ALL ACTION');
+        slot(PX + 14 + (PW - 36) / 2 + 8, FootY + 14, (PW - 36) / 2, 36, 'MORE OPTIONS');
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'ROSTER SPACING', [
+          ['S1', 'row-pad', '10 px'],
+          ['S2', 'item-gap', '6 px'],
+          ['H1', 'search-h', '34 px'],
+          ['H2', 'row-h', '50 px'],
+          ['Z1', 'avatar-d', '32 px']
+        ]);
+        ty = table(1180, ty, 'ROLES & PERMISSIONS', [
+          ['Host', 'manage, mute-all, end', 'FULL'],
+          ['Co-host', 'mute, admitting', 'MID'],
+          ['Attendee', 'media self-toggle', 'STD']
+        ]);
+      }
+    },
+
+    // 08: File Attachment Preview
+    {
+      id: 'UI-PREVIEW-ATTACHMENT',
+      title: '08 · File Attachment Preview Architecture',
+      desc: 'Shared document / media preview card: mime-type glyph, file metadata (name, byte size, format), download button and security status.',
+      figs: [
+        { lbl: 'W · card-w', val: '280 fixed' },
+        { lbl: 'H · card-h', val: '68 fixed' },
+        { lbl: 'Z1 · icon-d', val: '36' },
+        { lbl: 'S1 · pad', val: '10' },
+        { lbl: 'R1 · r-card', val: '8' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: ATTACHMENT CARD ARCHITECTURE', 'nth');
+        [
+          [1, 'Stores file metadata in PostgreSQL attachments table with size in bytes.'],
+          [2, 'Formatted human-readable size: KB / MB with two decimal precision.'],
+          [3, 'Action triggers authenticated download stream with verified MIME verification.'],
+          [4, 'Previews image attachments inline with max thumbnail constraint 180×120.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // File Card Preview
+        const AX = 380, AY = 260, AW = 360, AH = 78;
+        rr(AX, AY, AW, AH, 8, 'obj');
+        dimH(AX, AX + AW, AY - 14, null, null, 'W · card-w = 360');
+        dimV(AY, AY + AH, AX - 14, AY, AY + AH, 'H · card-h = 78');
+
+        // Icon Box
+        rr(AX + 12, AY + 14, 50, 50, 6, 'well');
+        slot(AX + 16, AY + 22, 42, 34, 'MIME');
+
+        // File info
+        slot(AX + 72, AY + 14, 200, 24, 'FILE_NAME.PDF · FLEX');
+        slot(AX + 72, AY + 42, 140, 20, '2.4 MB · APPLICATION/PDF');
+
+        // Download Action
+        slot(AX + AW - 56, AY + 20, 42, 38, 'DL');
+
+        // Image Attachment Alternative Below
+        const IX = 380, IY = 400, IW = 360, IH = 200;
+        rr(IX, IY, IW, IH, 8, 'obj');
+        tx(IX + 14, IY + 20, 'IMAGE THUMBNAIL PREVIEW CARD', 'dts');
+        slot(IX + 14, IY + 30, IW - 28, 110, 'THUMBNAIL IMAGE SLOT [MAX 180H] · OBJECT-FIT COVER');
+        slot(IX + 14, IY + 150, IW - 90, 36, 'IMAGE_CAPTURE.PNG · 1.1 MB');
+        slot(IX + IW - 64, IY + 150, 50, 36, 'VIEW');
+
+        rad(AX, AY, 8, 'tl', 'R1 = 8', 16);
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'ATTACHMENT SPACING', [
+          ['S1', 'card-padding', '12 px'],
+          ['S2', 'icon-margin', '10 px'],
+          ['W1', 'doc-card-w', '360 px'],
+          ['H1', 'doc-card-h', '78 px'],
+          ['R1', 'border-radius', '8 px']
+        ]);
+        ty = table(1180, ty, 'ALLOWED MIME TYPES', [
+          ['PDF', 'application/pdf', 'ALLOWED'],
+          ['Images', 'image/png, jpeg, webp', 'ALLOWED'],
+          ['Docs', 'text/plain, csv', 'ALLOWED'],
+          ['Max Size', '25 MB per item', 'ENFORCED']
+        ]);
+      }
+    },
+
+    // 09: Login and Registration Forms
+    {
+      id: 'UI-FORM-AUTH',
+      title: '09 · Login & Registration Forms Architecture',
+      desc: 'Centralized authentication container: tab switcher, validation fields (email, Argon2 password, display name), error banner slot and submission.',
+      figs: [
+        { lbl: 'W · card-w', val: '420 fixed' },
+        { lbl: 'H · login-h', val: '420 fixed' },
+        { lbl: 'H2 · reg-h', val: '490 fixed' },
+        { lbl: 'H3 · in-h', val: '42' },
+        { lbl: 'H4 · btn-h', val: '44' },
+        { lbl: 'R1 · card-r', val: '14' },
+        { lbl: 'R2 · in-r', val: '8' }
+      ],
+      draw: function() {
+        begin('drawingSvg');
+        tx(50, 56, 'NOTES: AUTHENTICATION FORMS ARCHITECTURE', 'nth');
+        [
+          [1, 'Secure Argon2id hashing on backend; rate-limited endpoints against brute-force attacks.'],
+          [2, 'Session tokens stored in HttpOnly, SameSite=Lax cookies with automatic CSRF token header.'],
+          [3, 'Zero mock user fallbacks; authenticates exclusively against Neon PostgreSQL users table.'],
+          [4, 'Error slot displays localized validation errors or generic invalid credentials notice.']
+        ].forEach(([n, t], i) => {
+          const y = 86 + i * 24;
+          nb(56, y - 4, n);
+          tx(72, y, t, 'nt');
+        });
+
+        // Dual Form Comparison
+        const LX = 120, LY = 220, LW = 400, LH = 450;
+        // Login Card
+        rr(LX, LY, LW, LH, 14, 'obj');
+        tx(LX + 16, LY + 22, 'FORM A: LOGIN ANATOMY', 'dts');
+        dimH(LX, LX + LW, LY - 14, null, null, 'W1 · auth-w = 400');
+        dimV(LY, LY + LH, LX - 14, LY, LY + LH, 'H1 · login-h = 450');
+
+        slot(LX + 24, LY + 38, LW - 48, 28, 'HEADER: "SIGN IN TO YOUR ACCOUNT"');
+        slot(LX + 24, LY + 78, LW - 48, 16, 'LABEL: EMAIL ADDRESS');
+        slot(LX + 24, LY + 98, LW - 48, 42, 'INPUT: EMAIL [H3=42]');
+
+        slot(LX + 24, LY + 152, LW - 48, 16, 'LABEL: PASSWORD');
+        slot(LX + 24, LY + 172, LW - 48, 42, 'INPUT: PASSWORD (MASKED)');
+
+        slot(LX + 24, LY + 226, LW - 48, 20, 'OPTIONS: REMEMBER ME / FORGOT');
+        slot(LX + 24, LY + 258, LW - 48, 44, 'BUTTON: SIGN IN · PRIMARY');
+        slot(LX + 24, LY + 314, LW - 48, 30, 'ERROR BANNER SLOT (CONDITIONAL)');
+        slot(LX + 24, LY + 360, LW - 48, 24, 'FOOTER: "DONT HAVE AN ACCOUNT? REGISTER"');
+
+        // Registration Card
+        const RX = 580, RY = 220, RW = 400, RH = 520;
+        rr(RX, RY, RW, RH, 14, 'obj');
+        tx(RX + 16, RY + 22, 'FORM B: REGISTRATION ANATOMY', 'dts');
+        dimH(RX, RX + RW, RY - 14, null, null, 'W2 · auth-w = 400');
+        dimV(RY, RY + RH, RX + RW + 14, RY, RY + RH, 'H2 · reg-h = 520');
+
+        slot(RX + 24, RY + 38, RW - 48, 28, 'HEADER: "CREATE NEW ACCOUNT"');
+        slot(RX + 24, RY + 78, RW - 48, 16, 'LABEL: FULL NAME');
+        slot(RX + 24, RY + 98, RW - 48, 42, 'INPUT: FULL NAME');
+
+        slot(RX + 24, RY + 150, RW - 48, 16, 'LABEL: EMAIL ADDRESS');
+        slot(RX + 24, RY + 170, RW - 48, 42, 'INPUT: EMAIL');
+
+        slot(RX + 24, RY + 222, RW - 48, 16, 'LABEL: PASSWORD (MIN 8 CHARS)');
+        slot(RX + 24, RY + 242, RW - 48, 42, 'INPUT: PASSWORD');
+
+        slot(RX + 24, RY + 294, RW - 48, 16, 'LABEL: CONFIRM PASSWORD');
+        slot(RX + 24, RY + 314, RW - 48, 42, 'INPUT: CONFIRM PASSWORD');
+
+        slot(RX + 24, RY + 370, RW - 48, 44, 'BUTTON: CREATE ACCOUNT · PRIMARY');
+        slot(RX + 24, RY + 426, RW - 48, 24, 'FOOTER: "ALREADY REGISTERED? SIGN IN"');
+
+        rad(LX, LY, 14, 'tl', 'R1 = 14', 18);
+
+        // Right Column Tables
+        let ty = 60;
+        ty = table(1180, ty, 'AUTH SPACING', [
+          ['S1', 'card-padding', '24 px'],
+          ['S2', 'field-gap', '14 px'],
+          ['S3', 'label-gap', '6 px'],
+          ['H1', 'input-height', '42 px'],
+          ['H2', 'button-height', '44 px']
+        ]);
+        ty = table(1180, ty, 'SECURITY SPEC', [
+          ['Hash', 'Argon2id', 'SERVER-SIDE'],
+          ['Token', 'SHA-256 hashed token', 'POSTGRES'],
+          ['Cookie', 'HttpOnly; SameSite=Lax', 'SECURE'],
+          ['CSRF', 'Double submit header', 'ENFORCED']
+        ]);
+      }
+    }
+  ];
+
+  window.switchSheet = function(idx) {
+    const s = sheets[idx];
+    if (!s) return;
+
+    // Update Header
+    document.getElementById('tbSheetTitle').textContent = s.title;
+    document.getElementById('tbSheetDesc').textContent = s.desc;
+    document.getElementById('tbDwgNo').textContent = s.id;
+    document.getElementById('footSheetInfo').innerHTML = `<b>${s.id}</b> &nbsp;|&nbsp; SHEET ${idx + 1} OF ${sheets.length}`;
+
+    // Update Figures row
+    const figsEl = document.getElementById('tbFigs');
+    figsEl.innerHTML = '';
+    s.figs.forEach((f, i) => {
+      const d = document.createElement('div');
+      d.className = 'fig-item';
+      d.innerHTML = `<div class="lbl">${f.lbl}</div><div class="fig-val">${f.val}</div>`;
+      figsEl.appendChild(d);
+    });
+
+    // Update Tab Buttons
+    const btns = document.querySelectorAll('.tab-btn');
+    btns.forEach((b, i) => {
+      b.classList.toggle('active', i === idx);
+    });
+
+    // Draw the SVG
+    s.draw();
+  };
+
+  // Initial draw sheet 0
+  switchSheet(0);
+})();
+</script>
+</body>
+</html>

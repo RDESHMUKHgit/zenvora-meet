@@ -1,0 +1,42 @@
+{
+  "name": "client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.3.4",
+    "@hookform/resolvers": "^6.0.2",
+    "@js-temporal/polyfill": "^0.5.1",
+    "antd": "^6.6.8",
+    "axios": "^1.21.0",
+    "lucide-react": "^1.64.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-hook-form": "^7.91.0",
+    "react-router-dom": "^7.18.5",
+    "socket.io-client": "^4.8.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.7",
+    "oxlint": "^1.89.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.8.0",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5"
+  }
+}
