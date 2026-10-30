@@ -13,8 +13,8 @@ const server = http.createServer(app);
 initSocketServer(server);
 
 // Start server
-server.listen(env.PORT, async () => {
-  logger.info(`Server started in ${env.NODE_ENV} mode on port ${env.PORT}`);
+server.listen(env.PORT, '0.0.0.0', async () => {
+  logger.info(`Server started in ${env.NODE_ENV} mode on port ${env.PORT} (0.0.0.0)`);
   logger.info(`Health check available at http://localhost:${env.PORT}/api/health`);
 
   // Reconcile unclosed meetings from previous server instance on startup

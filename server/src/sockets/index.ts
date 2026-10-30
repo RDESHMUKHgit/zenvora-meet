@@ -10,10 +10,36 @@ import { nowIso } from '../utils/time.js';
 
 let io: SocketIOServer | null = null;
 
+export const isAllowedSocketOrigin = (origin: string | undefined): boolean => {
+  if (!origin) return true;
+  if (origin === env.CORS_ORIGIN) return true;
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+    if (
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
+
 export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: env.CORS_ORIGIN,
+      origin: (requestOrigin, callback) => {
+        if (isAllowedSocketOrigin(requestOrigin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Blocked by CORS'));
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST'],
     },

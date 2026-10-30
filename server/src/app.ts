@@ -21,10 +21,36 @@ export const createApp = (): Express => {
     }),
   );
 
-  // CORS configuration
+  // CORS configuration supporting localhost and local Wi-Fi / LAN IP access
+  const isAllowedOrigin = (origin: string | undefined): boolean => {
+    if (!origin) return true;
+    if (origin === env.CORS_ORIGIN) return true;
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+      if (
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+        /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+      ) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  };
+
   app.use(
     cors({
-      origin: env.CORS_ORIGIN,
+      origin: (requestOrigin, callback) => {
+        if (isAllowedOrigin(requestOrigin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Blocked by CORS'));
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: [

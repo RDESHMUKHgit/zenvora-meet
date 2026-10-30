@@ -1,16 +1,21 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ||
-  (import.meta.env.VITE_API_BASE_URL
-    ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '')
-    : 'http://localhost:5000');
+const getSocketUrl = (): string => {
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL;
+  }
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '');
+  }
+  const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+  return `http://${host}:5000`;
+};
 
 let socket: Socket | null = null;
 
 export const getSocket = (): Socket => {
   if (!socket) {
-    socket = io(SOCKET_URL, {
+    socket = io(getSocketUrl(), {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       autoConnect: false,
