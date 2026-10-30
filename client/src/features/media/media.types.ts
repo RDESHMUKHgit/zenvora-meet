@@ -77,6 +77,7 @@ export interface SignalingDelegate {
 export interface IMediaEngine {
   initialize(options: MediaEngineInitOptions, signaling: SignalingDelegate): Promise<void>;
   startLocalMedia(constraints?: MediaStreamConstraints): Promise<MediaStream>;
+  retryMedia(constraints?: MediaStreamConstraints): Promise<MediaStream>;
   stopLocalMedia(): void;
   toggleMicrophone(enabled?: boolean): Promise<boolean>;
   toggleCamera(enabled?: boolean): Promise<boolean>;

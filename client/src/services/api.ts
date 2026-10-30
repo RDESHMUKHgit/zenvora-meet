@@ -10,8 +10,9 @@ function getApiBaseUrl(): string {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
-  return `http://${host}:5000/api`;
+  // Use relative '/api' so all requests share the exact origin with Vite dev server/proxy
+  // This completely eliminates cross-port firewall blockage and CORS preflight issues on mobile devices
+  return '/api';
 }
 
 const api = axios.create({

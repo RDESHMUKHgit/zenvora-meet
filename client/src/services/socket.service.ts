@@ -7,8 +7,11 @@ const getSocketUrl = (): string => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '');
   }
-  const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
-  return `http://${host}:5000`;
+  // Connect to the current origin so Vite proxies WebSocket /socket.io directly to backend
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin;
+  }
+  return 'http://localhost:5000';
 };
 
 let socket: Socket | null = null;

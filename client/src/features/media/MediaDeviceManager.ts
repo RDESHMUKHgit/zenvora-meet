@@ -17,16 +17,23 @@ export class MediaDeviceManager {
 
   private onStateChange?: (state: AvailableMediaDevices) => void;
   private onDeviceError?: (error: Error, context: string) => void;
+  private onPermissionChange?: (permissions: DevicePermissionState) => void;
 
   constructor(
     onStateChange?: (state: AvailableMediaDevices) => void,
-    onDeviceError?: (error: Error, context: string) => void
+    onDeviceError?: (error: Error, context: string) => void,
+    onPermissionChange?: (permissions: DevicePermissionState) => void
   ) {
     this.onStateChange = onStateChange;
     this.onDeviceError = onDeviceError;
+    this.onPermissionChange = onPermissionChange;
 
     if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
       navigator.mediaDevices.addEventListener('devicechange', this.handleDeviceChange);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', this.handleWindowFocus);
     }
   }
 
@@ -35,6 +42,23 @@ export class MediaDeviceManager {
       await this.enumerateDevices();
     } catch (err: unknown) {
       this.onDeviceError?.(err as Error, 'devicechange');
+    }
+  };
+
+  private handleWindowFocus = async () => {
+    try {
+      const prevCam = this.permissions.camera;
+      const prevMic = this.permissions.microphone;
+      const updated = await this.checkPermissions();
+      if (
+        (prevCam === 'denied' && updated.camera !== 'denied') ||
+        (prevMic === 'denied' && updated.microphone !== 'denied')
+      ) {
+        this.notifyState();
+        this.onPermissionChange?.(updated);
+      }
+    } catch {
+      // Ignore background check errors
     }
   };
 
@@ -48,8 +72,12 @@ export class MediaDeviceManager {
       const camStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
       this.permissions.camera = camStatus.state;
       camStatus.onchange = () => {
+        const changed = this.permissions.camera !== camStatus.state;
         this.permissions.camera = camStatus.state;
         this.notifyState();
+        if (changed) {
+          this.onPermissionChange?.(this.permissions);
+        }
       };
     } catch {
       // permissions query for camera not supported in all browsers
@@ -60,8 +88,12 @@ export class MediaDeviceManager {
       const micStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
       this.permissions.microphone = micStatus.state;
       micStatus.onchange = () => {
+        const changed = this.permissions.microphone !== micStatus.state;
         this.permissions.microphone = micStatus.state;
         this.notifyState();
+        if (changed) {
+          this.onPermissionChange?.(this.permissions);
+        }
       };
     } catch {
       // permissions query for microphone not supported in all browsers
@@ -103,36 +135,105 @@ export class MediaDeviceManager {
   }
 
   public async acquireUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream> {
+    if (
+      typeof window !== 'undefined' &&
+      !window.isSecureContext &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      throw new Error(
+        'Camera and microphone access requires HTTPS or localhost in modern web browsers.'
+      );
+    }
+
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new Error('navigator.mediaDevices.getUserMedia is not supported by this browser');
     }
 
+    // Attempt primary acquisition (both audio & video together)
     try {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      this.permissions.camera = 'granted';
-      this.permissions.microphone = 'granted';
+      if (constraints.video) this.permissions.camera = 'granted';
+      if (constraints.audio) this.permissions.microphone = 'granted';
 
       // Re-enumerate to get labeled devices now that permission is granted
       await this.enumerateDevices();
+      this.notifyState();
       return stream;
-    } catch (err: unknown) {
-      const error = err as Error;
+    } catch (primaryErr: unknown) {
+      const error = primaryErr as Error;
+
+      // Graceful fallback: If both were requested, try acquiring audio and video independently
+      if (constraints.audio && constraints.video) {
+        let audioStream: MediaStream | null = null;
+        let videoStream: MediaStream | null = null;
+
+        // Try audio separately
+        try {
+          audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: constraints.audio,
+            video: false,
+          });
+          this.permissions.microphone = 'granted';
+        } catch (audioErr: unknown) {
+          const aErr = audioErr as Error;
+          if (aErr.name === 'NotAllowedError' || aErr.name === 'PermissionDeniedError') {
+            this.permissions.microphone = 'denied';
+          }
+        }
+
+        // Try video separately
+        try {
+          videoStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: constraints.video,
+          });
+          this.permissions.camera = 'granted';
+        } catch (videoErr: unknown) {
+          const vErr = videoErr as Error;
+          if (vErr.name === 'NotAllowedError' || vErr.name === 'PermissionDeniedError') {
+            this.permissions.camera = 'denied';
+          }
+        }
+
+        // If at least one track succeeded, assemble combined stream
+        if (audioStream || videoStream) {
+          const combined = new MediaStream();
+          audioStream?.getAudioTracks().forEach((t) => combined.addTrack(t));
+          videoStream?.getVideoTracks().forEach((t) => combined.addTrack(t));
+
+          await this.enumerateDevices();
+          this.notifyState();
+          return combined;
+        }
+      }
+
+      // Both failed or single-stream failed
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        this.permissions.camera = 'denied';
-        this.permissions.microphone = 'denied';
+        if (constraints.video) this.permissions.camera = 'denied';
+        if (constraints.audio) this.permissions.microphone = 'denied';
         this.notifyState();
-        throw new Error('Camera/Microphone permission was denied. Please allow access in browser settings.', {
-          cause: err,
+        throw new Error('Camera or microphone permission was denied. Please allow access in browser settings.', {
+          cause: primaryErr,
         });
       }
+
       if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-        throw new Error('No camera or microphone device was found on this system.', { cause: err });
+        throw new Error('No camera or microphone device was found on this system.', { cause: primaryErr });
       }
+
       if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        throw new Error('Camera or microphone is already in use by another application.', { cause: err });
+        throw new Error('Camera or microphone is already in use by another application.', { cause: primaryErr });
       }
+
       throw error;
     }
+  }
+
+  public async retryPermissions(): Promise<DevicePermissionState> {
+    await this.checkPermissions();
+    await this.enumerateDevices();
+    return this.permissions;
   }
 
   public async switchAudioInput(
@@ -247,6 +348,9 @@ export class MediaDeviceManager {
   public destroy() {
     if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
       navigator.mediaDevices.removeEventListener('devicechange', this.handleDeviceChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', this.handleWindowFocus);
     }
   }
 }

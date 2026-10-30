@@ -34,7 +34,19 @@ export class P2PMediaEngine extends MediaEngine {
 
     this.deviceManager = new MediaDeviceManager(
       (devices) => this.options?.onDeviceStateChanged?.(devices),
-      (err, ctx) => this.options?.onMediaError?.(err, ctx)
+      (err, ctx) => this.options?.onMediaError?.(err, ctx),
+      async (permissions) => {
+        if (
+          (permissions.camera === 'granted' || permissions.microphone === 'granted') &&
+          (!this.localStream || this.localStream.getTracks().length === 0)
+        ) {
+          try {
+            await this.startLocalMedia();
+          } catch {
+            // Handled internally
+          }
+        }
+      }
     );
 
     this.screenShareManager = new ScreenShareManager({
@@ -147,6 +159,16 @@ export class P2PMediaEngine extends MediaEngine {
       this.options?.onMediaError?.(err as Error, 'startLocalMedia');
       throw err;
     }
+  }
+
+  public async retryMedia(constraints?: MediaStreamConstraints): Promise<MediaStream> {
+    await this.deviceManager.retryPermissions();
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream = null;
+      this.localState.stream = null;
+    }
+    return this.startLocalMedia(constraints);
   }
 
   public stopLocalMedia(): void {

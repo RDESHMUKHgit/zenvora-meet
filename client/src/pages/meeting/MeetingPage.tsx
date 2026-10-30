@@ -27,6 +27,7 @@ import {
   Volume2,
   CheckCircle2,
   AlertTriangle,
+  RefreshCw,
   Download,
   WifiOff,
   Radio,
@@ -166,6 +167,7 @@ export const MeetingPage: React.FC = () => {
     toggleMicrophone,
     toggleCamera,
     toggleScreenShare,
+    retryMediaAccess,
     setAudioInputDevice,
     setVideoInputDevice,
     setAudioOutputDevice,
@@ -550,8 +552,49 @@ export const MeetingPage: React.FC = () => {
       ? `${displayParticipants.length} (Unlimited)`
       : `${displayParticipants.length} / ${meeting.maxParticipants}`;
 
-  const hasPermissionError =
-    devices.permissions.camera === 'denied' || devices.permissions.microphone === 'denied';
+  const isAllMediaBlocked =
+    devices.permissions.camera === 'denied' && devices.permissions.microphone === 'denied';
+  const isCameraBlocked =
+    devices.permissions.camera === 'denied' && devices.permissions.microphone !== 'denied';
+  const isMicBlocked =
+    devices.permissions.microphone === 'denied' && devices.permissions.camera !== 'denied';
+  const isInsecureContext =
+    typeof window !== 'undefined' &&
+    !window.isSecureContext &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1';
+
+  const [retryingMedia, setRetryingMedia] = useState(false);
+
+  const handleRetryMedia = async () => {
+    try {
+      setRetryingMedia(true);
+      message.loading({ content: 'Requesting device permissions...', key: 'media-retry' });
+      const success = await retryMediaAccess();
+      if (success) {
+        message.success({ content: 'Media devices connected successfully!', key: 'media-retry' });
+      } else {
+        message.info({
+          content: 'If you allowed permissions in browser settings, please click "Reload Page" to apply.',
+          key: 'media-retry',
+          duration: 4,
+        });
+      }
+    } finally {
+      setRetryingMedia(false);
+    }
+  };
+
+  // Auto-retry media when tab regains focus after user adjusted settings in address bar
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isAllMediaBlocked || isCameraBlocked || isMicBlocked || !localStream) {
+        retryMediaAccess().catch(() => {});
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [isAllMediaBlocked, isCameraBlocked, isMicBlocked, localStream, retryMediaAccess]);
 
   const hostLeaveMenu: MenuProps['items'] = [
     {
@@ -755,13 +798,144 @@ export const MeetingPage: React.FC = () => {
         />
       )}
 
-      {/* Permission Denied Alert Banner */}
-      {hasPermissionError && (
+      {/* Insecure Context Warning on Mobile HTTP */}
+      {isInsecureContext && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<AlertTriangle size={15} />}
+          message={
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <span>
+                <strong>Mobile Browser Security Notice:</strong> Modern mobile browsers restrict camera/microphone access over plain HTTP (LAN IP). Text chat and screen reception work normally. To stream video/audio from your mobile phone, connect via HTTPS or test using desktop localhost.
+              </span>
+            </div>
+          }
+          banner
+          closable
+        />
+      )}
+
+      {/* Both Camera & Microphone Blocked */}
+      {isAllMediaBlocked && (
         <Alert
           type="error"
           showIcon
           icon={<AlertTriangle size={15} />}
-          message="Camera or microphone access is blocked. Please allow device permissions in your browser address bar to transmit media."
+          message={
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <span>
+                <strong>Camera & microphone access is blocked.</strong> Please allow device permissions in your browser address bar to transmit media.
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<RefreshCw size={12} className={retryingMedia ? 'spin' : ''} />}
+                  loading={retryingMedia}
+                  onClick={handleRetryMedia}
+                >
+                  Retry Permissions
+                </Button>
+                <Button size="small" onClick={() => window.location.reload()}>
+                  Reload Page
+                </Button>
+              </div>
+            </div>
+          }
+          banner
+        />
+      )}
+
+      {/* Camera Only Blocked (Audio Working) */}
+      {isCameraBlocked && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<AlertTriangle size={15} />}
+          message={
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <span>
+                <strong>Camera access is blocked.</strong> You are participating in audio-only mode. Allow camera permissions in your address bar to share video.
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button
+                  size="small"
+                  icon={<RefreshCw size={12} className={retryingMedia ? 'spin' : ''} />}
+                  loading={retryingMedia}
+                  onClick={handleRetryMedia}
+                >
+                  Retry Camera
+                </Button>
+                <Button size="small" onClick={() => window.location.reload()}>
+                  Reload Page
+                </Button>
+              </div>
+            </div>
+          }
+          banner
+          closable
+        />
+      )}
+
+      {/* Microphone Only Blocked (Camera Working) */}
+      {isMicBlocked && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<AlertTriangle size={15} />}
+          message={
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <span>
+                <strong>Microphone access is blocked.</strong> You are participating in video-only mode. Allow microphone permissions in your address bar to speak.
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button
+                  size="small"
+                  icon={<RefreshCw size={12} className={retryingMedia ? 'spin' : ''} />}
+                  loading={retryingMedia}
+                  onClick={handleRetryMedia}
+                >
+                  Retry Mic
+                </Button>
+                <Button size="small" onClick={() => window.location.reload()}>
+                  Reload Page
+                </Button>
+              </div>
+            </div>
+          }
           banner
           closable
         />

@@ -17,6 +17,7 @@ export abstract class MediaEngine implements IMediaEngine {
 
   abstract initialize(options: MediaEngineInitOptions, signaling: SignalingDelegate): Promise<void>;
   abstract startLocalMedia(constraints?: MediaStreamConstraints): Promise<MediaStream>;
+  abstract retryMedia(constraints?: MediaStreamConstraints): Promise<MediaStream>;
   abstract stopLocalMedia(): void;
   abstract toggleMicrophone(enabled?: boolean): Promise<boolean>;
   abstract toggleCamera(enabled?: boolean): Promise<boolean>;

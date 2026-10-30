@@ -283,6 +283,18 @@ export const useMediaEngine = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleMicrophone, toggleCamera]);
 
+  const retryMediaAccess = useCallback(async (constraints?: MediaStreamConstraints): Promise<boolean> => {
+    if (!engineRef.current) return false;
+    try {
+      setMediaError(null);
+      const stream = await engineRef.current.retryMedia(constraints);
+      setLocalStream(stream);
+      return stream.getTracks().length > 0;
+    } catch {
+      return false;
+    }
+  }, []);
+
   return {
     localStream,
     screenStream,
@@ -295,6 +307,7 @@ export const useMediaEngine = ({
     toggleMicrophone,
     toggleCamera,
     toggleScreenShare,
+    retryMediaAccess,
     setAudioInputDevice,
     setVideoInputDevice,
     setAudioOutputDevice,
