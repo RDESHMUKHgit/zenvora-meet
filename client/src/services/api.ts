@@ -42,6 +42,11 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Surface user-friendly error message from backend if available
+    const serverMessage = error?.response?.data?.message || error?.response?.data?.error;
+    if (serverMessage && typeof serverMessage === 'string') {
+      error.message = serverMessage;
+    }
     return Promise.reject(error);
   }
 );
