@@ -189,7 +189,35 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
       }
     );
 
-    // WebRTC Signaling Events
+    // Validate socket room membership before relaying signaling events
+    const validateSignaling = (meetingCode: string, claimedSenderId: string, targetId: string) => {
+      const code = meetingCode?.toLowerCase().trim();
+      const room = roomManager.getRoom(code);
+      if (!room) return null;
+
+      if (!socket.rooms.has(`room:${code}`)) {
+        logger.warn({ socketId: socket.id, meetingCode: code }, 'Signaling rejected: socket not in room channel');
+        return null;
+      }
+
+      const actualSenderId = room.socketMap.get(socket.id);
+      if (!actualSenderId || actualSenderId !== claimedSenderId) {
+        logger.warn(
+          { socketId: socket.id, actualSenderId, claimedSenderId },
+          'Signaling rejected: claimed senderId does not match socket session'
+        );
+        return null;
+      }
+
+      const target = room.participants.get(targetId);
+      if (!target?.socketId) {
+        return null;
+      }
+
+      return { room, target, verifiedSenderId: actualSenderId };
+    };
+
+    // WebRTC Signaling Events with Room Membership Validation
     socket.on(
       'signal:offer',
       (data: {
@@ -198,11 +226,10 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
         senderParticipantId: string;
         offer: unknown;
       }) => {
-        const room = roomManager.getRoom(data.meetingCode);
-        const target = room?.participants.get(data.targetParticipantId);
-        if (target?.socketId) {
-          io?.to(target.socketId).emit('signal:offer', {
-            senderParticipantId: data.senderParticipantId,
+        const validated = validateSignaling(data.meetingCode, data.senderParticipantId, data.targetParticipantId);
+        if (validated) {
+          io?.to(validated.target.socketId).emit('signal:offer', {
+            senderParticipantId: validated.verifiedSenderId,
             offer: data.offer,
           });
         }
@@ -217,11 +244,10 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
         senderParticipantId: string;
         answer: unknown;
       }) => {
-        const room = roomManager.getRoom(data.meetingCode);
-        const target = room?.participants.get(data.targetParticipantId);
-        if (target?.socketId) {
-          io?.to(target.socketId).emit('signal:answer', {
-            senderParticipantId: data.senderParticipantId,
+        const validated = validateSignaling(data.meetingCode, data.senderParticipantId, data.targetParticipantId);
+        if (validated) {
+          io?.to(validated.target.socketId).emit('signal:answer', {
+            senderParticipantId: validated.verifiedSenderId,
             answer: data.answer,
           });
         }
@@ -236,11 +262,10 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
         senderParticipantId: string;
         candidate: unknown;
       }) => {
-        const room = roomManager.getRoom(data.meetingCode);
-        const target = room?.participants.get(data.targetParticipantId);
-        if (target?.socketId) {
-          io?.to(target.socketId).emit('signal:ice-candidate', {
-            senderParticipantId: data.senderParticipantId,
+        const validated = validateSignaling(data.meetingCode, data.senderParticipantId, data.targetParticipantId);
+        if (validated) {
+          io?.to(validated.target.socketId).emit('signal:ice-candidate', {
+            senderParticipantId: validated.verifiedSenderId,
             candidate: data.candidate,
           });
         }

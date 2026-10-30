@@ -41,4 +41,6 @@ coverage/
 tmp/
 temp/
 .turbo/
+*.docx
+~$*
 

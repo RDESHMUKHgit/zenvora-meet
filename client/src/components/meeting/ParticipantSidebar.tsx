@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
-import { Input, Button, Avatar, Typography, Space } from 'antd';
-import { Users, Search, Mic, MicOff, Video, VideoOff, X, Shield } from 'lucide-react';
+import { Input, Button, Avatar, Typography, Space, Popover, Slider } from 'antd';
+import {
+  Users,
+  Search,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  X,
+  Shield,
+  Volume2,
+  VolumeX,
+  Volume1,
+  Monitor,
+  Loader2,
+} from 'lucide-react';
 import { tokens } from '../../styles/tokens';
+import type { RemotePeerMedia } from '../../features/media/media.types';
 
 const { Text } = Typography;
 
@@ -21,6 +36,8 @@ interface ParticipantSidebarProps {
   participants: ParticipantItem[];
   isHost?: boolean;
   onMuteAll?: () => void;
+  remotePeers?: Map<string, RemotePeerMedia>;
+  onVolumeChange?: (participantId: string, volume: number) => void;
 }
 
 export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
@@ -28,6 +45,8 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
   participants,
   isHost = false,
   onMuteAll,
+  remotePeers,
+  onVolumeChange,
 }) => {
   const [search, setSearch] = useState('');
 
@@ -97,6 +116,44 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
       >
         {filtered.map((item) => {
           const participantName = item.displayName || item.name || 'Participant';
+          const remote = remotePeers?.get(item.id);
+          const vol = remote?.volume ?? 1.0;
+          const conn = remote?.connectionState;
+          const sharing = item.isScreenSharing || remote?.isScreenSharing;
+
+          const getVolIcon = () => {
+            if (vol === 0) return <VolumeX size={13} color={tokens.colors.error} />;
+            if (vol < 0.5) return <Volume1 size={13} color={tokens.colors.textSecondary} />;
+            return <Volume2 size={13} color={tokens.colors.textSecondary} />;
+          };
+
+          const volumePopoverContent = (
+            <div style={{ width: '130px', padding: '4px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: tokens.colors.textMuted,
+                  marginBottom: '6px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>Volume</span>
+                <span style={{ fontWeight: 600 }}>{Math.round(vol * 100)}%</span>
+              </div>
+              <Slider
+                min={0}
+                max={100}
+                value={Math.round(vol * 100)}
+                onChange={(val) => onVolumeChange?.(item.id, val / 100)}
+                styles={{
+                  track: { backgroundColor: tokens.colors.accentPrimary },
+                  handle: { borderColor: tokens.colors.accentPrimary },
+                }}
+              />
+            </div>
+          );
+
           return (
             <div
               key={item.id}
@@ -110,21 +167,30 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
                 border: `1px solid ${tokens.colors.surfaceBorderSubtle}`,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
                 <Avatar
                   size={32}
                   style={{
-                    backgroundColor: tokens.colors.accentPrimary,
-                    color: '#ffffff',
+                    backgroundColor: item.isSelf
+                      ? tokens.colors.accentPrimaryLight
+                      : tokens.colors.surfaceTertiary,
+                    color: item.isSelf
+                      ? tokens.colors.accentPrimary
+                      : tokens.colors.textPrimary,
                     fontSize: '13px',
                     fontWeight: 600,
                     flexShrink: 0,
+                    border: `1px solid ${
+                      item.isSelf
+                        ? tokens.colors.accentPrimaryBorder
+                        : tokens.colors.surfaceBorder
+                    }`,
                   }}
                 >
                   {participantName.charAt(0).toUpperCase()}
                 </Avatar>
 
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div
                     style={{
                       fontSize: '13px',
@@ -137,7 +203,7 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
                   >
                     {participantName} {item.isSelf && '(You)'}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                     {item.role === 'host' && (
                       <span
                         style={{
@@ -157,28 +223,70 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
                         Participant
                       </Text>
                     )}
+                    {sharing && (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '10.5px',
+                          color: tokens.colors.accentSecondary,
+                        }}
+                      >
+                        <Monitor size={10} /> Sharing
+                      </span>
+                    )}
+                    {!item.isSelf && conn && conn !== 'connected' && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          color:
+                            conn === 'failed'
+                              ? tokens.colors.error
+                              : tokens.colors.warning,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                        }}
+                      >
+                        {conn === 'connecting' && <Loader2 size={9} className="spin-animation" />}
+                        {conn}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <Space size={6}>
+              <Space size={4}>
+                {/* Remote Volume Popover */}
+                {!item.isSelf && onVolumeChange && (
+                  <Popover content={volumePopoverContent} trigger="click" placement="left">
+                    <Button
+                      type="text"
+                      size="small"
+                      style={{ padding: '2px 4px', height: 'auto', minWidth: 'auto' }}
+                      icon={getVolIcon()}
+                    />
+                  </Popover>
+                )}
+
                 <div
                   style={{
-                    padding: '4px',
+                    padding: '3px',
                     borderRadius: tokens.borderRadius.sm,
                     color: item.isMuted ? tokens.colors.error : tokens.colors.textSecondary,
                   }}
                 >
-                  {item.isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+                  {item.isMuted ? <MicOff size={13} /> : <Mic size={13} />}
                 </div>
                 <div
                   style={{
-                    padding: '4px',
+                    padding: '3px',
                     borderRadius: tokens.borderRadius.sm,
                     color: item.isVideoOff ? tokens.colors.error : tokens.colors.textSecondary,
                   }}
                 >
-                  {item.isVideoOff ? <VideoOff size={14} /> : <Video size={14} />}
+                  {item.isVideoOff ? <VideoOff size={13} /> : <Video size={13} />}
                 </div>
               </Space>
             </div>

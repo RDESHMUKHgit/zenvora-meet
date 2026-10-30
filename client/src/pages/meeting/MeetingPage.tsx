@@ -1,18 +1,48 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Typography, Button, Result, Spin, Modal, App, Dropdown, MenuProps } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Typography,
+  Button,
+  Result,
+  Spin,
+  Modal,
+  App,
+  Dropdown,
+  Select,
+  type MenuProps,
+} from 'antd';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Copy, Check, ShieldCheck, Clock, Settings, Users, PhoneOff, LogOut } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  ShieldCheck,
+  Clock,
+  Settings,
+  Users,
+  PhoneOff,
+  LogOut,
+  Mic,
+  Video,
+  Volume2,
+  CheckCircle2,
+  AlertTriangle,
+} from 'lucide-react';
 import { useAuth } from '../../contexts';
 import { useDocumentTitle } from '../../hooks';
 import { meetingApi } from '../../services/meeting.service';
-import { connectSocket } from '../../services/socket.service';
-import { VideoGrid, MeetingControlDock, ParticipantSidebar, type ParticipantItem } from '../../components/meeting';
+import { connectSocket, getSocket } from '../../services/socket.service';
+import {
+  VideoGrid,
+  MeetingControlDock,
+  ParticipantSidebar,
+  type ParticipantItem,
+} from '../../components/meeting';
 import { ChatPanel, type ChatMessage } from '../../components/chat';
+import { useMediaEngine } from '../../features/media';
 import { ROUTES } from '../../constants';
 import { tokens } from '../../styles/tokens';
 import type { MeetingRecord } from '../../types';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 export const MeetingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -59,19 +89,49 @@ export const MeetingPage: React.FC = () => {
   });
 
   const [myRole, setMyRole] = useState<'host' | 'cohost' | 'participant'>(stateData.role || 'participant');
-  const [micActive, setMicActive] = useState(!stateData.muteMic);
-  const [camActive, setCamActive] = useState(!stateData.turnOffCam);
-  const [screenSharing, setScreenSharing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'chat' | 'roster' | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [participants, setParticipants] = useState<ParticipantItem[]>([]);
   const [endModalOpen, setEndModalOpen] = useState(false);
-
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
 
   useDocumentTitle(meeting ? `${meeting.title} · Meeting` : 'Conference Meeting');
+
+  // Real WebRTC Media Engine hook
+  const {
+    localStream,
+    screenStream,
+    isAudioMuted,
+    isVideoOff,
+    isScreenSharing,
+    remotePeers,
+    devices,
+    mediaError,
+    toggleMicrophone,
+    toggleCamera,
+    toggleScreenShare,
+    setAudioInputDevice,
+    setVideoInputDevice,
+    setAudioOutputDevice,
+    setRemoteVolume,
+    syncRoomParticipants,
+  } = useMediaEngine({
+    meetingCode: id || '',
+    participantId,
+    displayName,
+    socket: getSocket(),
+    initialMuteAudio: stateData.muteMic ?? false,
+    initialTurnOffVideo: stateData.turnOffCam ?? false,
+  });
+
+  // Notify on media device errors (permissions, device unavailable)
+  useEffect(() => {
+    if (mediaError) {
+      message.error(mediaError);
+    }
+  }, [mediaError, message]);
 
   // Load and verify meeting from PostgreSQL backend
   const verifyRoom = useCallback(async () => {
@@ -115,7 +175,7 @@ export const MeetingPage: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Socket.IO Room Integration
+  // Socket.IO Room Lifecycle Integration
   useEffect(() => {
     if (!id || !meeting) return;
 
@@ -128,8 +188,8 @@ export const MeetingPage: React.FC = () => {
       displayName,
       hostToken,
       userId: user?.id || null,
-      isMuted: !micActive,
-      isVideoOff: !camActive,
+      isMuted: isAudioMuted,
+      isVideoOff,
     });
 
     // 2. Room Joined Confirmation
@@ -148,6 +208,8 @@ export const MeetingPage: React.FC = () => {
             isSelf: p.id === participantId,
           }))
         );
+        // Pre-register existing peers into media engine
+        syncRoomParticipants(payload.room.participants);
       }
     });
 
@@ -160,6 +222,7 @@ export const MeetingPage: React.FC = () => {
             isSelf: p.id === participantId,
           }))
         );
+        syncRoomParticipants(payload.participants);
       }
     });
 
@@ -199,7 +262,9 @@ export const MeetingPage: React.FC = () => {
     // 7. Host Mute All Command
     socket.on('host:mute-all', () => {
       if (myRole !== 'host') {
-        setMicActive(false);
+        if (!isAudioMuted) {
+          toggleMicrophone();
+        }
         message.warning('The host has muted your microphone');
       }
     });
@@ -234,34 +299,21 @@ export const MeetingPage: React.FC = () => {
       socket.off('meeting:ended');
       socket.off('room:error');
     };
-  }, [id, meeting, participantId, displayName, hostToken, user?.id, myRole, micActive, camActive, message, navigate]);
-
-  // Synchronize media toggles over socket
-  const handleToggleMic = () => {
-    const next = !micActive;
-    setMicActive(next);
-    if (id) {
-      const socket = connectSocket();
-      socket.emit('media:toggle', {
-        meetingCode: id,
-        participantId,
-        isMuted: !next,
-      });
-    }
-  };
-
-  const handleToggleCam = () => {
-    const next = !camActive;
-    setCamActive(next);
-    if (id) {
-      const socket = connectSocket();
-      socket.emit('media:toggle', {
-        meetingCode: id,
-        participantId,
-        isVideoOff: !next,
-      });
-    }
-  };
+  }, [
+    id,
+    meeting,
+    participantId,
+    displayName,
+    hostToken,
+    user?.id,
+    myRole,
+    isAudioMuted,
+    isVideoOff,
+    syncRoomParticipants,
+    toggleMicrophone,
+    message,
+    navigate,
+  ]);
 
   const formatDuration = (totalSeconds: number) => {
     const hrs = Math.floor(totalSeconds / 3600);
@@ -331,17 +383,28 @@ export const MeetingPage: React.FC = () => {
     setMessages((prev) => [...prev, newMsg]);
   };
 
-  // Ensure local participant appears in grid if socket hasn't returned yet
+  // Synchronize local states with display list
   const displayParticipants: ParticipantItem[] =
     participants.length > 0
-      ? participants
+      ? participants.map((p) =>
+          p.id === participantId
+            ? {
+                ...p,
+                isMuted: isAudioMuted,
+                isVideoOff: isVideoOff,
+                isScreenSharing: isScreenSharing,
+                isSelf: true,
+              }
+            : p
+        )
       : [
           {
             id: participantId,
             name: displayName,
             role: myRole,
-            isMuted: !micActive,
-            isVideoOff: !camActive,
+            isMuted: isAudioMuted,
+            isVideoOff: isVideoOff,
+            isScreenSharing: isScreenSharing,
             isSelf: true,
           },
         ];
@@ -534,9 +597,9 @@ export const MeetingPage: React.FC = () => {
           <Button
             size="middle"
             icon={<Settings size={15} />}
-            onClick={() => navigate(ROUTES.SETTINGS)}
+            onClick={() => setDeviceSettingsOpen(true)}
           >
-            Settings
+            Devices
           </Button>
         </div>
       </div>
@@ -555,12 +618,18 @@ export const MeetingPage: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Responsive Video Grid */}
+          {/* Responsive Live Video Grid */}
           <div style={{ flex: 1, width: '100%', minHeight: 0, overflow: 'auto' }}>
             <VideoGrid
               participants={displayParticipants}
               activeSpeakerId={participantId}
-              localVideoRef={localVideoRef}
+              localStream={localStream}
+              screenStream={screenStream}
+              isAudioMuted={isAudioMuted}
+              isVideoOff={isVideoOff}
+              isScreenSharing={isScreenSharing}
+              remotePeers={remotePeers}
+              onVolumeChange={setRemoteVolume}
             />
           </div>
 
@@ -570,38 +639,38 @@ export const MeetingPage: React.FC = () => {
               <Dropdown menu={{ items: hostLeaveMenu }} placement="topRight">
                 <div>
                   <MeetingControlDock
-                    micActive={micActive}
-                    camActive={camActive}
-                    screenSharing={screenSharing}
+                    micActive={!isAudioMuted}
+                    camActive={!isVideoOff}
+                    screenSharing={isScreenSharing}
                     chatOpen={sidebarTab === 'chat'}
                     rosterOpen={sidebarTab === 'roster'}
                     participantCount={displayParticipants.length}
                     unreadCount={messages.length}
-                    onToggleMic={handleToggleMic}
-                    onToggleCam={handleToggleCam}
-                    onToggleScreenShare={() => setScreenSharing((v) => !v)}
+                    onToggleMic={toggleMicrophone}
+                    onToggleCam={toggleCamera}
+                    onToggleScreenShare={toggleScreenShare}
                     onToggleChat={() => setSidebarTab((prev) => (prev === 'chat' ? null : 'chat'))}
                     onToggleRoster={() => setSidebarTab((prev) => (prev === 'roster' ? null : 'roster'))}
-                    onOpenSettings={() => navigate(ROUTES.SETTINGS)}
+                    onOpenSettings={() => setDeviceSettingsOpen(true)}
                     onLeave={() => setEndModalOpen(true)}
                   />
                 </div>
               </Dropdown>
             ) : (
               <MeetingControlDock
-                micActive={micActive}
-                camActive={camActive}
-                screenSharing={screenSharing}
+                micActive={!isAudioMuted}
+                camActive={!isVideoOff}
+                screenSharing={isScreenSharing}
                 chatOpen={sidebarTab === 'chat'}
                 rosterOpen={sidebarTab === 'roster'}
                 participantCount={displayParticipants.length}
                 unreadCount={messages.length}
-                onToggleMic={handleToggleMic}
-                onToggleCam={handleToggleCam}
-                onToggleScreenShare={() => setScreenSharing((v) => !v)}
+                onToggleMic={toggleMicrophone}
+                onToggleCam={toggleCamera}
+                onToggleScreenShare={toggleScreenShare}
                 onToggleChat={() => setSidebarTab((prev) => (prev === 'chat' ? null : 'chat'))}
                 onToggleRoster={() => setSidebarTab((prev) => (prev === 'roster' ? null : 'roster'))}
-                onOpenSettings={() => navigate(ROUTES.SETTINGS)}
+                onOpenSettings={() => setDeviceSettingsOpen(true)}
                 onLeave={handleLeaveRoom}
               />
             )}
@@ -623,9 +692,145 @@ export const MeetingPage: React.FC = () => {
             participants={displayParticipants}
             isHost={isHost}
             onMuteAll={handleMuteAll}
+            remotePeers={remotePeers}
+            onVolumeChange={setRemoteVolume}
           />
         )}
       </div>
+
+      {/* In-Meeting Audio / Video Device Settings Modal */}
+      <Modal
+        title="Audio & Video Settings"
+        open={deviceSettingsOpen}
+        onCancel={() => setDeviceSettingsOpen(false)}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => setDeviceSettingsOpen(false)}>
+            Done
+          </Button>,
+        ]}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '8px 0' }}>
+          {/* Microphone Selector */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <Mic size={16} color={tokens.colors.accentPrimary} />
+              <Text strong style={{ fontSize: '13px' }}>Microphone</Text>
+            </div>
+            <Select
+              style={{ width: '100%' }}
+              value={devices.selectedAudioInputId || undefined}
+              onChange={setAudioInputDevice}
+              placeholder="Select microphone..."
+              options={devices.audioInputs.map((d) => ({
+                label: d.label || `Microphone ${d.deviceId.slice(0, 5)}`,
+                value: d.deviceId,
+              }))}
+            />
+          </div>
+
+          {/* Camera Selector */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <Video size={16} color={tokens.colors.accentPrimary} />
+              <Text strong style={{ fontSize: '13px' }}>Camera</Text>
+            </div>
+            <Select
+              style={{ width: '100%' }}
+              value={devices.selectedVideoInputId || undefined}
+              onChange={setVideoInputDevice}
+              placeholder="Select camera..."
+              options={devices.videoInputs.map((d) => ({
+                label: d.label || `Camera ${d.deviceId.slice(0, 5)}`,
+                value: d.deviceId,
+              }))}
+            />
+          </div>
+
+          {/* Speaker / Audio Output Selector */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <Volume2 size={16} color={tokens.colors.accentPrimary} />
+              <Text strong style={{ fontSize: '13px' }}>Speaker (Audio Output)</Text>
+            </div>
+            <Select
+              style={{ width: '100%' }}
+              value={devices.selectedAudioOutputId || undefined}
+              onChange={setAudioOutputDevice}
+              placeholder="Default system output"
+              disabled={devices.audioOutputs.length === 0}
+              options={devices.audioOutputs.map((d) => ({
+                label: d.label || `Speaker ${d.deviceId.slice(0, 5)}`,
+                value: d.deviceId,
+              }))}
+            />
+            {devices.audioOutputs.length === 0 && (
+              <div style={{ fontSize: '11px', color: tokens.colors.textMuted, marginTop: '4px' }}>
+                Audio output device selection is handled by system default on this browser.
+              </div>
+            )}
+          </div>
+
+          {/* Permissions Info */}
+          <div
+            style={{
+              padding: '10px 12px',
+              backgroundColor: tokens.colors.surfaceSecondary,
+              borderRadius: tokens.borderRadius.sm,
+              border: `1px solid ${tokens.colors.surfaceBorder}`,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              fontSize: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Camera Permission:</span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontWeight: 600,
+                  color:
+                    devices.permissions.camera === 'granted'
+                      ? tokens.colors.success
+                      : tokens.colors.warning,
+                }}
+              >
+                {devices.permissions.camera === 'granted' ? (
+                  <CheckCircle2 size={13} />
+                ) : (
+                  <AlertTriangle size={13} />
+                )}
+                {devices.permissions.camera.toUpperCase()}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Microphone Permission:</span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontWeight: 600,
+                  color:
+                    devices.permissions.microphone === 'granted'
+                      ? tokens.colors.success
+                      : tokens.colors.warning,
+                }}
+              >
+                {devices.permissions.microphone === 'granted' ? (
+                  <CheckCircle2 size={13} />
+                ) : (
+                  <AlertTriangle size={13} />
+                )}
+                {devices.permissions.microphone.toUpperCase()}
+              </span>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {/* Host End Meeting Confirmation Modal */}
       <Modal
