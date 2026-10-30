@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Space } from 'antd';
 import { Clock } from 'lucide-react';
 import { getLiveClockData } from '../../utils';
+import { useAuth } from '../../contexts';
 import { tokens } from '../../styles/tokens';
 
 const { Text } = Typography;
@@ -12,21 +13,34 @@ interface LiveClockProps {
 }
 
 export const LiveClock: React.FC<LiveClockProps> = ({ timeZone, compact = false }) => {
-  const [clockData, setClockData] = useState(() => getLiveClockData(timeZone));
+  const { user } = useAuth();
+  const effectiveTimeZone = timeZone || user?.timezone;
+
+  const [clockData, setClockData] = useState(() => getLiveClockData(effectiveTimeZone));
 
   useEffect(() => {
+    // Sync immediately when timezone or mount changes
+    setClockData(getLiveClockData(effectiveTimeZone));
+
     const interval = setInterval(() => {
-      setClockData(getLiveClockData(timeZone));
+      setClockData(getLiveClockData(effectiveTimeZone));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeZone]);
+  }, [effectiveTimeZone]);
 
   if (compact) {
     return (
-      <Space size={6} align="center" orientation="horizontal">
+      <Space size={6} align="center" style={{ display: 'inline-flex' }}>
         <Clock size={14} color={tokens.colors.textMuted} />
-        <Text style={{ fontSize: '13px', fontWeight: 500, color: tokens.colors.textSecondary }}>
+        <Text
+          style={{
+            fontSize: '13px',
+            fontWeight: 500,
+            color: tokens.colors.textSecondary,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
           {clockData.timeString}
         </Text>
       </Space>
@@ -46,7 +60,7 @@ export const LiveClock: React.FC<LiveClockProps> = ({ timeZone, compact = false 
         boxShadow: tokens.shadows.subtle,
       }}
     >
-      <Space size={8} align="center" orientation="horizontal">
+      <Space size={8} align="center" style={{ display: 'inline-flex' }}>
         <Clock size={16} color={tokens.colors.accentPrimary} />
         <Text
           style={{
@@ -73,4 +87,3 @@ export const LiveClock: React.FC<LiveClockProps> = ({ timeZone, compact = false 
     </div>
   );
 };
-

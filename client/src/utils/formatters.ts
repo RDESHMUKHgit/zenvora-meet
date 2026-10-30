@@ -8,9 +8,15 @@ export const getCurrentIsoTimestamp = (): string => {
   return Temporal.Now.instant().toString();
 };
 
-export const getLiveClockData = (timeZone: string = 'UTC') => {
+export const getLiveClockData = (timeZone?: string) => {
   try {
-    const zdt = Temporal.Now.zonedDateTimeISO(timeZone);
+    const resolvedTz =
+      timeZone ||
+      (typeof Intl !== 'undefined'
+        ? Intl.DateTimeFormat().resolvedOptions().timeZone
+        : Temporal.Now.timeZoneId());
+
+    const zdt = Temporal.Now.zonedDateTimeISO(resolvedTz);
 
     const hour12 = zdt.hour % 12 || 12;
     const minute = zdt.minute.toString().padStart(2, '0');
@@ -45,13 +51,14 @@ export const getLiveClockData = (timeZone: string = 'UTC') => {
     const now = new Date();
     return {
       timeString: now.toLocaleTimeString([], {
-        hour: '2-digit',
+        hour: 'numeric',
         minute: '2-digit',
         second: '2-digit',
+        hour12: true,
       }),
       dateString: now.toLocaleDateString([], {
         weekday: 'long',
-        month: 'short',
+        month: 'long',
         day: 'numeric',
         year: 'numeric',
       }),
