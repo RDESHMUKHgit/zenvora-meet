@@ -8,7 +8,7 @@ export const SESSION_COOKIE_NAME = 'session_token';
 
 const getSessionCookieOptions = (maxAgeMs: number = 7 * 24 * 60 * 60 * 1000) => ({
   httpOnly: true,
-  sameSite: 'lax' as const,
+  sameSite: (env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
   secure: env.NODE_ENV === 'production',
   path: '/',
   maxAge: maxAgeMs,

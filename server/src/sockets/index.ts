@@ -17,6 +17,7 @@ export const isAllowedSocketOrigin = (origin: string | undefined): boolean => {
     const url = new URL(origin);
     const hostname = url.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+    if (hostname.endsWith('.netlify.app') || hostname.endsWith('.onrender.com')) return true;
     if (
       /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
       /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||

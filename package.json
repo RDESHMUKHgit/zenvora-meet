@@ -1,8 +1,8 @@
 {
-  "name": "rd-video-meet",
+  "name": "zenvora-meet",
   "version": "1.0.0",
   "private": true,
-  "description": "Production-oriented video meeting web application",
+  "description": "Zenvora Meet - Production-oriented video meeting web application",
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "npm --prefix client run dev",

@@ -10,7 +10,7 @@ export const setCsrfCookie = (res: Response, token?: string): string => {
   const csrfToken = token || generateCsrfToken();
   res.cookie(CSRF_COOKIE_NAME, csrfToken, {
     httpOnly: false, // Must be readable by client JavaScript to set X-CSRF-Token header
-    sameSite: 'lax',
+    sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
     secure: env.NODE_ENV === 'production',
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -42,7 +42,14 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
       const originUrl = new URL(origin);
       const allowedOriginUrl = new URL(env.CORS_ORIGIN);
 
-      if (originUrl.origin !== allowedOriginUrl.origin && env.NODE_ENV === 'production') {
+      const isAllowedHost =
+        originUrl.origin === allowedOriginUrl.origin ||
+        originUrl.hostname.endsWith('.netlify.app') ||
+        originUrl.hostname.endsWith('.onrender.com') ||
+        originUrl.hostname === 'localhost' ||
+        originUrl.hostname === '127.0.0.1';
+
+      if (!isAllowedHost && env.NODE_ENV === 'production') {
         throw new ForbiddenError('Cross-origin request rejected');
       }
     } catch (err) {
