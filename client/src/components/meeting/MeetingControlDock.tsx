@@ -26,7 +26,7 @@ interface MeetingControlDockProps {
   chatOpen: boolean;
   rosterOpen: boolean;
   participantCount: number;
-  unreadCount?: number;
+  hasUnread?: boolean;
   recordingState?: RecordingState;
   recordDurationSeconds?: number;
   onToggleMic: () => void;
@@ -49,7 +49,7 @@ export const MeetingControlDock: React.FC<MeetingControlDockProps> = ({
   chatOpen,
   rosterOpen,
   participantCount,
-  unreadCount = 0,
+  hasUnread = false,
   recordingState = 'idle',
   recordDurationSeconds = 0,
   onToggleMic,
@@ -223,7 +223,7 @@ export const MeetingControlDock: React.FC<MeetingControlDockProps> = ({
 
       {/* In-Call Chat */}
       <Tooltip title="In-Call Chat">
-        <Badge count={unreadCount} size="small" offset={[-2, 4]}>
+        <div style={{ position: 'relative', display: 'inline-flex' }}>
           <Button
             shape="circle"
             size="large"
@@ -232,7 +232,33 @@ export const MeetingControlDock: React.FC<MeetingControlDockProps> = ({
             onClick={onToggleChat}
             aria-label="Toggle chat panel"
           />
-        </Badge>
+          {hasUnread && !chatOpen && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '1px 5px',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: tokens.colors.accentPrimary,
+                backgroundColor: tokens.colors.accentPrimaryLight,
+                border: `1px solid ${tokens.colors.accentPrimaryBorder}`,
+                borderRadius: '10px',
+                boxShadow: tokens.shadows.subtle,
+                lineHeight: 1.2,
+                userSelect: 'none',
+              }}
+            >
+              NEW
+            </span>
+          )}
+        </div>
       </Tooltip>
 
       {/* Participants Roster */}

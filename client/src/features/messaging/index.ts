@@ -1,2 +1,13 @@
-// In-meeting messaging and real-time chat feature domain
-export {};
+export * from './types/chat.types';
+export * from './utils/chat.utils';
+export * from './services/chat.service';
+export * from './hooks/useMessaging';
+export * from './components/ChatPanel';
+export * from './components/ConversationList';
+export * from './components/ConversationView';
+export * from './components/MessageList';
+export * from './components/MessageItem';
+export * from './components/MessageComposer';
+export * from './components/ReactionPicker';
+export * from './components/ReadReceipt';
+export * from './components/NewMessageIndicator';

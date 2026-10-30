@@ -1,9 +1,11 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { z } from 'zod';
 import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import { roomManager } from '../services/room.manager.js';
 import { meetingRepository } from '../repositories/meeting.repository.js';
+import { chatService } from '../services/chat.service.js';
 import { nowIso } from '../utils/time.js';
 
 let io: SocketIOServer | null = null;
@@ -153,47 +155,321 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
       }
     );
 
-    // In-Call Chat Messaging
-    socket.on(
-      'chat:message',
-      (data: {
-        meetingCode: string;
-        participantId: string;
-        content: string;
-      }) => {
-        const code = data.meetingCode?.toLowerCase().trim();
-        const content = typeof data.content === 'string' ? data.content.trim() : '';
-        if (!code || !content || !data.participantId) return;
+    // Helper to validate that socket is in meeting room and caller is authorized
+    const validateParticipant = (meetingCode: string, claimedParticipantId: string) => {
+      const code = meetingCode?.toLowerCase().trim();
+      const room = roomManager.getRoom(code);
+      if (!room) return null;
 
-        // Content length guard
-        const sanitizedContent = content.slice(0, 2000);
+      if (!socket.rooms.has(`room:${code}`)) {
+        logger.warn({ socketId: socket.id, meetingCode: code }, 'Socket not in room channel');
+        return null;
+      }
 
-        const room = roomManager.getRoom(code);
-        if (!room) return;
+      const actualParticipantId = room.socketMap.get(socket.id);
+      if (!actualParticipantId || actualParticipantId !== claimedParticipantId) {
+        logger.warn(
+          { socketId: socket.id, actualParticipantId, claimedParticipantId },
+          'Claimed participantId does not match socket session'
+        );
+        return null;
+      }
 
-        // Verify socket is joined in this room
-        if (!socket.rooms.has(`room:${code}`)) {
-          logger.warn({ socketId: socket.id, meetingCode: code }, 'Chat rejected: socket not in room channel');
+      const participant = room.participants.get(claimedParticipantId);
+      if (!participant) return null;
+
+      return { room, participant, code };
+    };
+
+    // Chat Conversation Room Join
+    socket.on('chat:join', async (data: { meetingCode: string; conversationId: string; participantId: string }) => {
+      try {
+        const validated = validateParticipant(data.meetingCode, data.participantId);
+        if (!validated) {
+          socket.emit('chat:error', { message: 'Unauthorized conversation join attempt' });
           return;
         }
 
-        const participant = room.participants.get(data.participantId);
-        if (!participant) return;
+        const convId = data.conversationId?.trim();
+        if (!convId) {
+          socket.emit('chat:error', { message: 'Invalid conversationId' });
+          return;
+        }
 
-        const messagePayload = {
-          id: `msg-${Date.now()}-${crypto.randomUUID().slice(0, 6)}`,
-          meetingCode: code,
-          senderParticipantId: participant.id,
-          senderName: participant.displayName,
-          content: sanitizedContent,
-          timestamp: nowIso(),
-        };
+        socket.join(`conv:${convId}`);
+        socket.emit('chat:joined', { conversationId: convId });
+        logger.info({ socketId: socket.id, convId, participantId: data.participantId }, 'Socket joined conversation room');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to join conversation';
+        socket.emit('chat:error', { message: msg });
+      }
+    });
 
-        io?.to(`room:${code}`).emit('chat:message', messagePayload);
-        logger.info(
-          { meetingCode: code, senderId: participant.id, messageId: messagePayload.id },
-          'In-call chat message broadcasted'
+    // Chat Conversation Room Leave
+    socket.on('chat:leave', (data: { conversationId: string }) => {
+      const convId = data?.conversationId?.trim();
+      if (convId) {
+        socket.leave(`conv:${convId}`);
+      }
+    });
+
+    // Submit Text Message
+    const messageSendSchema = z.object({
+      meetingCode: z.string().min(1),
+      conversationId: z.string().min(1),
+      participantId: z.string().min(1),
+      content: z.string().min(1, 'Message cannot be empty').max(5000, 'Message cannot exceed 5,000 characters'),
+      clientMessageId: z.string().optional(),
+    });
+
+    socket.on(
+      'message:send',
+      async (
+        rawData: unknown,
+        ack?: (response: { success: boolean; message?: unknown; error?: string }) => void
+      ) => {
+        try {
+          const parsed = messageSendSchema.safeParse(rawData);
+          if (!parsed.success) {
+            const errText = parsed.error.issues[0]?.message || 'Invalid message payload';
+            socket.emit('chat:error', { message: errText });
+            ack?.({ success: false, error: errText });
+            return;
+          }
+
+          const { meetingCode, conversationId, participantId, content, clientMessageId } = parsed.data;
+          const validated = validateParticipant(meetingCode, participantId);
+          if (!validated) {
+            socket.emit('chat:error', { message: 'Unauthorized participant' });
+            ack?.({ success: false, error: 'Unauthorized participant' });
+            return;
+          }
+
+          const newMsg = await chatService.sendMessage(
+            meetingCode,
+            conversationId,
+            validated.participant.id,
+            validated.participant.displayName,
+            validated.participant.userId,
+            content,
+            clientMessageId
+          );
+
+          // Deliver to conversation channel
+          io?.to(`conv:${conversationId}`).emit('message:new', newMsg);
+
+          // If this is a direct conversation, also notify the recipient directly if not already in conv room
+          if (newMsg.conversationId.includes('direct')) {
+            // direct conversation id formats: direct-code-p1-p2 or UUID
+            const conv = await chatService.getConversations(meetingCode, validated.participant.id);
+            const thisConv = conv.find((c) => c.id === conversationId);
+            if (thisConv) {
+              const recipient = thisConv.members.find((m) => m.participantId !== validated.participant.id);
+              if (recipient) {
+                const recipientParticipant = validated.room.participants.get(recipient.participantId);
+                if (recipientParticipant?.socketId) {
+                  io?.to(recipientParticipant.socketId).emit('message:new', newMsg);
+                }
+              }
+            }
+          }
+
+          // Acknowledge back to sender
+          ack?.({ success: true, message: newMsg });
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : 'Failed to send message';
+          socket.emit('chat:error', { message: errMsg });
+          ack?.({ success: false, error: errMsg });
+        }
+      }
+    );
+
+    // Edit Message
+    const messageEditSchema = z.object({
+      meetingCode: z.string().min(1),
+      conversationId: z.string().min(1),
+      messageId: z.string().min(1),
+      participantId: z.string().min(1),
+      content: z.string().min(1).max(5000),
+    });
+
+    socket.on('message:edit', async (rawData: unknown) => {
+      try {
+        const parsed = messageEditSchema.safeParse(rawData);
+        if (!parsed.success) {
+          socket.emit('chat:error', { message: parsed.error.issues[0]?.message || 'Invalid edit payload' });
+          return;
+        }
+
+        const { meetingCode, conversationId, messageId, participantId, content } = parsed.data;
+        const validated = validateParticipant(meetingCode, participantId);
+        if (!validated) {
+          socket.emit('chat:error', { message: 'Unauthorized edit attempt' });
+          return;
+        }
+
+        const updated = await chatService.editMessage(
+          meetingCode,
+          conversationId,
+          messageId,
+          validated.participant.id,
+          content
         );
+
+        io?.to(`conv:${conversationId}`).emit('message:edited', updated);
+      } catch (err: unknown) {
+        socket.emit('chat:error', { message: err instanceof Error ? err.message : 'Failed to edit message' });
+      }
+    });
+
+    // Delete Message
+    const messageDeleteSchema = z.object({
+      meetingCode: z.string().min(1),
+      conversationId: z.string().min(1),
+      messageId: z.string().min(1),
+      participantId: z.string().min(1),
+    });
+
+    socket.on('message:delete', async (rawData: unknown) => {
+      try {
+        const parsed = messageDeleteSchema.safeParse(rawData);
+        if (!parsed.success) {
+          socket.emit('chat:error', { message: parsed.error.issues[0]?.message || 'Invalid delete payload' });
+          return;
+        }
+
+        const { meetingCode, conversationId, messageId, participantId } = parsed.data;
+        const validated = validateParticipant(meetingCode, participantId);
+        if (!validated) {
+          socket.emit('chat:error', { message: 'Unauthorized delete attempt' });
+          return;
+        }
+
+        const updated = await chatService.deleteMessage(
+          meetingCode,
+          conversationId,
+          messageId,
+          validated.participant.id
+        );
+
+        io?.to(`conv:${conversationId}`).emit('message:deleted', updated);
+      } catch (err: unknown) {
+        socket.emit('chat:error', { message: err instanceof Error ? err.message : 'Failed to delete message' });
+      }
+    });
+
+    // Emoji Reactions
+    const messageReactionSchema = z.object({
+      meetingCode: z.string().min(1),
+      conversationId: z.string().min(1),
+      messageId: z.string().min(1),
+      participantId: z.string().min(1),
+      emoji: z.string().min(1).max(32),
+    });
+
+    socket.on('message:reaction', async (rawData: unknown) => {
+      try {
+        const parsed = messageReactionSchema.safeParse(rawData);
+        if (!parsed.success) {
+          socket.emit('chat:error', { message: parsed.error.issues[0]?.message || 'Invalid reaction payload' });
+          return;
+        }
+
+        const { meetingCode, conversationId, messageId, participantId, emoji } = parsed.data;
+        const validated = validateParticipant(meetingCode, participantId);
+        if (!validated) {
+          socket.emit('chat:error', { message: 'Unauthorized reaction attempt' });
+          return;
+        }
+
+        const result = await chatService.toggleReaction(
+          meetingCode,
+          conversationId,
+          messageId,
+          validated.participant.id,
+          validated.participant.userId,
+          emoji
+        );
+
+        io?.to(`conv:${conversationId}`).emit('message:reaction', {
+          conversationId,
+          messageId,
+          participantId: validated.participant.id,
+          emoji: result.emoji,
+          action: result.action,
+        });
+      } catch (err: unknown) {
+        socket.emit('chat:error', { message: err instanceof Error ? err.message : 'Failed to toggle reaction' });
+      }
+    });
+
+    // Mark as Read
+    const messageReadSchema = z.object({
+      meetingCode: z.string().min(1),
+      conversationId: z.string().min(1),
+      participantId: z.string().min(1),
+      messageIds: z.array(z.string()).min(1),
+    });
+
+    socket.on('message:read', async (rawData: unknown) => {
+      try {
+        const parsed = messageReadSchema.safeParse(rawData);
+        if (!parsed.success) return;
+
+        const { meetingCode, conversationId, participantId, messageIds } = parsed.data;
+        const validated = validateParticipant(meetingCode, participantId);
+        if (!validated) return;
+
+        await chatService.markAsRead(
+          meetingCode,
+          conversationId,
+          messageIds,
+          validated.participant.id,
+          validated.participant.userId
+        );
+
+        io?.to(`conv:${conversationId}`).emit('message:read', {
+          conversationId,
+          readerParticipantId: validated.participant.id,
+          messageIds,
+          readAt: nowIso(),
+        });
+      } catch {
+        // Ignore read receipt background failures
+      }
+    });
+
+    // Legacy in-call chat fallback handler
+    socket.on(
+      'chat:message',
+      async (data: { meetingCode: string; participantId: string; content: string }) => {
+        try {
+          const code = data.meetingCode?.toLowerCase().trim();
+          const content = typeof data.content === 'string' ? data.content.trim() : '';
+          if (!code || !content || !data.participantId) return;
+
+          const validated = validateParticipant(code, data.participantId);
+          if (!validated) return;
+
+          // Default to group conversation
+          const groupConv = await chatService.getConversations(code, validated.participant.id);
+          const targetConv = groupConv.find((c) => c.conversationType === 'group');
+          if (!targetConv) return;
+
+          const newMsg = await chatService.sendMessage(
+            code,
+            targetConv.id,
+            validated.participant.id,
+            validated.participant.displayName,
+            validated.participant.userId,
+            content
+          );
+
+          io?.to(`room:${code}`).emit('chat:message', newMsg);
+          io?.to(`conv:${targetConv.id}`).emit('message:new', newMsg);
+        } catch (err) {
+          logger.warn({ err }, 'Error in fallback chat:message handler');
+        }
       }
     );
 

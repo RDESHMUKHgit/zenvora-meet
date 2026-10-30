@@ -15,3 +15,4 @@ export interface ScreenRecorderOptions {
   onError?: (error: Error) => void;
   onAutoStopped?: (result: RecordingResult) => void;
 }
+

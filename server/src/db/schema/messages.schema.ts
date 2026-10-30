@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { conversations } from './conversations.schema.js';
 import { users } from './users.schema.js';
 import { meetingParticipants } from './meetings.schema.js';
@@ -18,6 +18,7 @@ export const messages = pgTable(
     messageType: varchar('message_type', { length: 50 }).notNull().default('text'),
     content: text('content').notNull(),
     attachmentId: uuid('attachment_id').references(() => attachments.id, { onDelete: 'set null' }),
+    clientMessageId: varchar('client_message_id', { length: 100 }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
     editedAt: timestamp('edited_at', { withTimezone: true, mode: 'string' }),
     deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
@@ -25,6 +26,7 @@ export const messages = pgTable(
   (table) => [
     index('idx_messages_conversation_created').on(table.conversationId, table.createdAt),
     index('idx_messages_sender_user_id').on(table.senderUserId),
+    index('idx_messages_client_msg_id').on(table.clientMessageId),
   ]
 );
 
@@ -44,6 +46,7 @@ export const messageReads = pgTable(
   (table) => [
     index('idx_message_reads_message_id').on(table.messageId),
     index('idx_message_reads_reader_user_id').on(table.readerUserId),
+    uniqueIndex('idx_unique_message_reader_part').on(table.messageId, table.readerParticipantId),
   ]
 );
 
@@ -64,6 +67,7 @@ export const messageReactions = pgTable(
   (table) => [
     index('idx_message_reactions_message_id').on(table.messageId),
     index('idx_message_reactions_user_id').on(table.userId),
+    uniqueIndex('idx_unique_message_reaction_part').on(table.messageId, table.participantId, table.emoji),
   ]
 );
 
@@ -73,4 +77,3 @@ export type MessageRead = typeof messageReads.$inferSelect;
 export type NewMessageRead = typeof messageReads.$inferInsert;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type NewMessageReaction = typeof messageReactions.$inferInsert;
-

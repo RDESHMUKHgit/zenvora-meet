@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger.js';
 import { nowIso } from '../utils/time.js';
+import { ephemeralChatManager } from './ephemeral-chat.manager.js';
 
 export interface ActiveParticipant {
   id: string; // participant ID (UUID)
@@ -332,6 +333,7 @@ export class RoomManager implements IRoomManager {
       room.participants.clear();
       room.socketMap.clear();
       this.rooms.delete(norm);
+      ephemeralChatManager.purgeRoom(norm);
       logger.info({ meetingCode: norm }, 'Room purged from in-memory RoomManager');
     }
   }

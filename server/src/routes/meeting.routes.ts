@@ -7,6 +7,7 @@ import {
   leaveMeeting,
   endMeeting,
 } from '../controllers/meeting.controller.js';
+import { chatRouter } from './chat.routes.js';
 import { requireAuth, optionalAuth } from '../middlewares/auth.middleware.js';
 import { validateBody } from '../middlewares/validate.middleware.js';
 import {
@@ -35,3 +36,6 @@ meetingRouter.post('/:code/leave', optionalAuth, validateBody(leaveMeetingSchema
 
 // Explicit meeting termination by host (host authentication or host token required)
 meetingRouter.post('/:code/end', optionalAuth, validateBody(endMeetingSchema), endMeeting);
+
+// In-meeting chat routes (conversations, messages, direct chat, read receipts)
+meetingRouter.use('/:code', chatRouter);

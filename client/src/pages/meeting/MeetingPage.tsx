@@ -42,7 +42,7 @@ import {
   ParticipantSidebar,
   type ParticipantItem,
 } from '../../components/meeting';
-import { ChatPanel, type ChatMessage } from '../../components/chat';
+import { ChatPanel, useMessaging } from '../../features/messaging';
 import { useMediaEngine } from '../../features/media';
 import { useScreenRecorder } from '../../features/recording';
 import { ROUTES } from '../../constants';
@@ -98,8 +98,27 @@ export const MeetingPage: React.FC = () => {
   const [myRole, setMyRole] = useState<'host' | 'cohost' | 'participant'>(stateData.role || 'participant');
   const [copiedLink, setCopiedLink] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'chat' | 'roster' | null>(null);
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  // In-meeting real-time messaging hook
+  const {
+    conversations,
+    activeConversationId,
+    activeConversation,
+    activeMessages,
+    unreadConvs,
+    hasAnyUnread,
+    errorMessage: chatError,
+    clearError: clearChatError,
+    selectConversation,
+    sendMessage: handleSendMessage,
+    toggleReaction: handleToggleReaction,
+    startDirectMessage,
+  } = useMessaging({
+    meetingCode: id || '',
+    participantId,
+    displayName,
+    isChatOpen: sidebarTab === 'chat',
+  });
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [participants, setParticipants] = useState<ParticipantItem[]>([]);
   const [endModalOpen, setEndModalOpen] = useState(false);
@@ -307,39 +326,7 @@ export const MeetingPage: React.FC = () => {
       }
     );
 
-    // 7. In-Call Chat Messaging
-    socket.on(
-      'chat:message',
-      (payload: {
-        id: string;
-        senderParticipantId: string;
-        senderName: string;
-        content: string;
-        timestamp: string;
-      }) => {
-        const isSelf = payload.senderParticipantId === participantId;
-        const msgTime = new Date(payload.timestamp).toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-
-        const newMsg: ChatMessage = {
-          id: payload.id,
-          senderName: payload.senderName,
-          isSelf,
-          content: payload.content,
-          timestamp: msgTime,
-        };
-
-        setMessages((prev) => [...prev, newMsg]);
-
-        if (!isSelf && sidebarTab !== 'chat') {
-          setUnreadChatCount((prev) => prev + 1);
-        }
-      }
-    );
-
-    // 8. Host Mute All Command
+    // 7. Host Mute All Command
     socket.on('host:mute-all', () => {
       if (myRole !== 'host') {
         if (!isAudioMuted) {
@@ -377,7 +364,6 @@ export const MeetingPage: React.FC = () => {
       socket.off('participant:joined');
       socket.off('participant:left');
       socket.off('participant:media-updated');
-      socket.off('chat:message');
       socket.off('host:mute-all');
       socket.off('meeting:ended');
       socket.off('room:error');
@@ -454,24 +440,8 @@ export const MeetingPage: React.FC = () => {
     }
   };
 
-  const handleSendMessage = (content: string) => {
-    if (!id || !content.trim()) return;
-    const socket = connectSocket();
-    socket.emit('chat:message', {
-      meetingCode: id,
-      participantId,
-      content: content.trim(),
-    });
-  };
-
   const handleToggleChat = () => {
-    setSidebarTab((prev) => {
-      const next = prev === 'chat' ? null : 'chat';
-      if (next === 'chat') {
-        setUnreadChatCount(0);
-      }
-      return next;
-    });
+    setSidebarTab((prev) => (prev === 'chat' ? null : 'chat'));
   };
 
   const handleToggleRoster = () => {
@@ -825,7 +795,7 @@ export const MeetingPage: React.FC = () => {
                     chatOpen={sidebarTab === 'chat'}
                     rosterOpen={sidebarTab === 'roster'}
                     participantCount={displayParticipants.length}
-                    unreadCount={unreadChatCount}
+                    hasUnread={hasAnyUnread}
                     recordingState={recordingState}
                     recordDurationSeconds={recordDurationSeconds}
                     onToggleMic={toggleMicrophone}
@@ -850,7 +820,7 @@ export const MeetingPage: React.FC = () => {
                 chatOpen={sidebarTab === 'chat'}
                 rosterOpen={sidebarTab === 'roster'}
                 participantCount={displayParticipants.length}
-                unreadCount={unreadChatCount}
+                hasUnread={hasAnyUnread}
                 recordingState={recordingState}
                 recordDurationSeconds={recordDurationSeconds}
                 onToggleMic={toggleMicrophone}
@@ -875,8 +845,20 @@ export const MeetingPage: React.FC = () => {
             {sidebarTab === 'chat' && (
               <ChatPanel
                 onClose={() => setSidebarTab(null)}
-                messages={messages}
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                activeConversation={activeConversation}
+                activeMessages={activeMessages}
+                unreadConvs={unreadConvs}
+                hasAnyUnread={hasAnyUnread}
+                currentParticipantId={participantId}
+                roomParticipants={participants}
+                errorMessage={chatError}
+                onClearError={clearChatError}
+                onSelectConversation={selectConversation}
                 onSendMessage={handleSendMessage}
+                onToggleReaction={handleToggleReaction}
+                onStartDirectMessage={startDirectMessage}
               />
             )}
 
@@ -888,6 +870,10 @@ export const MeetingPage: React.FC = () => {
                 onMuteAll={handleMuteAll}
                 remotePeers={remotePeers}
                 onVolumeChange={setRemoteVolume}
+                onDirectMessage={(p) => {
+                  setSidebarTab('chat');
+                  startDirectMessage(p.id, p.displayName || p.name);
+                }}
               />
             )}
           </>
@@ -903,8 +889,20 @@ export const MeetingPage: React.FC = () => {
             {sidebarTab === 'chat' && (
               <ChatPanel
                 onClose={() => setSidebarTab(null)}
-                messages={messages}
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                activeConversation={activeConversation}
+                activeMessages={activeMessages}
+                unreadConvs={unreadConvs}
+                hasAnyUnread={hasAnyUnread}
+                currentParticipantId={participantId}
+                roomParticipants={participants}
+                errorMessage={chatError}
+                onClearError={clearChatError}
+                onSelectConversation={selectConversation}
                 onSendMessage={handleSendMessage}
+                onToggleReaction={handleToggleReaction}
+                onStartDirectMessage={startDirectMessage}
               />
             )}
 
@@ -916,6 +914,10 @@ export const MeetingPage: React.FC = () => {
                 onMuteAll={handleMuteAll}
                 remotePeers={remotePeers}
                 onVolumeChange={setRemoteVolume}
+                onDirectMessage={(p) => {
+                  setSidebarTab('chat');
+                  startDirectMessage(p.id, p.displayName || p.name);
+                }}
               />
             )}
           </Drawer>

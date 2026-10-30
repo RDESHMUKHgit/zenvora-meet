@@ -14,6 +14,7 @@ import {
   Volume1,
   Monitor,
   Loader2,
+  MessageSquare,
 } from 'lucide-react';
 import { tokens } from '../../styles/tokens';
 import type { RemotePeerMedia } from '../../features/media/media.types';
@@ -38,6 +39,7 @@ interface ParticipantSidebarProps {
   onMuteAll?: () => void;
   remotePeers?: Map<string, RemotePeerMedia>;
   onVolumeChange?: (participantId: string, volume: number) => void;
+  onDirectMessage?: (participant: ParticipantItem) => void;
 }
 
 export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
@@ -47,6 +49,7 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
   onMuteAll,
   remotePeers,
   onVolumeChange,
+  onDirectMessage,
 }) => {
   const [search, setSearch] = useState('');
 
@@ -258,6 +261,19 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
               </div>
 
               <Space size={4}>
+                {/* Direct Message Action */}
+                {!item.isSelf && onDirectMessage && (
+                  <Button
+                    type="text"
+                    size="small"
+                    style={{ padding: '2px 4px', height: 'auto', minWidth: 'auto' }}
+                    icon={<MessageSquare size={13} color={tokens.colors.accentPrimary} />}
+                    onClick={() => onDirectMessage(item)}
+                    title={`Send direct message to ${participantName}`}
+                    aria-label={`Send direct message to ${participantName}`}
+                  />
+                )}
+
                 {/* Remote Volume Popover */}
                 {!item.isSelf && onVolumeChange && (
                   <Popover content={volumePopoverContent} trigger="click" placement="left">
