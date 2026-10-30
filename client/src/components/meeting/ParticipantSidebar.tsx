@@ -8,9 +8,11 @@ const { Text } = Typography;
 export interface ParticipantItem {
   id: string;
   name: string;
+  displayName?: string;
   role: 'host' | 'cohost' | 'participant';
   isMuted: boolean;
   isVideoOff: boolean;
+  isScreenSharing?: boolean;
   isSelf?: boolean;
 }
 
@@ -29,9 +31,10 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
 }) => {
   const [search, setSearch] = useState('');
 
-  const filtered = participants.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = participants.filter((p) => {
+    const n = (p.displayName || p.name || '').toLowerCase();
+    return n.includes(search.toLowerCase());
+  });
 
   return (
     <div
@@ -92,92 +95,95 @@ export const ParticipantSidebar: React.FC<ParticipantSidebarProps> = ({
           gap: '6px',
         }}
       >
-        {filtered.map((item) => (
-          <div
-            key={item.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 10px',
-              borderRadius: tokens.borderRadius.base,
-              backgroundColor: tokens.colors.surfaceSecondary,
-              border: `1px solid ${tokens.colors.surfaceBorderSubtle}`,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-              <Avatar
-                size={32}
-                style={{
-                  backgroundColor: tokens.colors.accentPrimary,
-                  color: '#ffffff',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  flexShrink: 0,
-                }}
-              >
-                {item.name.charAt(0).toUpperCase()}
-              </Avatar>
-
-              <div style={{ minWidth: 0 }}>
-                <div
+        {filtered.map((item) => {
+          const participantName = item.displayName || item.name || 'Participant';
+          return (
+            <div
+              key={item.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 10px',
+                borderRadius: tokens.borderRadius.base,
+                backgroundColor: tokens.colors.surfaceSecondary,
+                border: `1px solid ${tokens.colors.surfaceBorderSubtle}`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                <Avatar
+                  size={32}
                   style={{
+                    backgroundColor: tokens.colors.accentPrimary,
+                    color: '#ffffff',
                     fontSize: '13px',
-                    fontWeight: 500,
-                    color: tokens.colors.textPrimary,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    fontWeight: 600,
+                    flexShrink: 0,
                   }}
                 >
-                  {item.name} {item.isSelf && '(You)'}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {item.role === 'host' && (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        fontSize: '10.5px',
-                        fontWeight: 600,
-                        color: tokens.colors.accentPrimary,
-                      }}
-                    >
-                      <Shield size={10} /> Host
-                    </span>
-                  )}
-                  {item.role === 'participant' && (
-                    <Text type="secondary" style={{ fontSize: '11px' }}>
-                      Participant
-                    </Text>
-                  )}
-                </div>
-              </div>
-            </div>
+                  {participantName.charAt(0).toUpperCase()}
+                </Avatar>
 
-            <Space size={6}>
-              <div
-                style={{
-                  padding: '4px',
-                  borderRadius: tokens.borderRadius.sm,
-                  color: item.isMuted ? tokens.colors.error : tokens.colors.textSecondary,
-                }}
-              >
-                {item.isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      color: tokens.colors.textPrimary,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {participantName} {item.isSelf && '(You)'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {item.role === 'host' && (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '10.5px',
+                          fontWeight: 600,
+                          color: tokens.colors.accentPrimary,
+                        }}
+                      >
+                        <Shield size={10} /> Host
+                      </span>
+                    )}
+                    {item.role === 'participant' && (
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                        Participant
+                      </Text>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div
-                style={{
-                  padding: '4px',
-                  borderRadius: tokens.borderRadius.sm,
-                  color: item.isVideoOff ? tokens.colors.error : tokens.colors.textSecondary,
-                }}
-              >
-                {item.isVideoOff ? <VideoOff size={14} /> : <Video size={14} />}
-              </div>
-            </Space>
-          </div>
-        ))}
+
+              <Space size={6}>
+                <div
+                  style={{
+                    padding: '4px',
+                    borderRadius: tokens.borderRadius.sm,
+                    color: item.isMuted ? tokens.colors.error : tokens.colors.textSecondary,
+                  }}
+                >
+                  {item.isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+                </div>
+                <div
+                  style={{
+                    padding: '4px',
+                    borderRadius: tokens.borderRadius.sm,
+                    color: item.isVideoOff ? tokens.colors.error : tokens.colors.textSecondary,
+                  }}
+                >
+                  {item.isVideoOff ? <VideoOff size={14} /> : <Video size={14} />}
+                </div>
+              </Space>
+            </div>
+          );
+        })}
       </div>
 
       {/* Host Controls Footer */}

@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.ts\"",
     "test:auth": "tsx src/tests/auth.test.ts",
+    "test:meeting": "tsx src/tests/meeting-lifecycle.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

@@ -3,22 +3,23 @@ import { meetingService } from '../services/meeting.service.js';
 
 export const createMeeting = async (req: Request, res: Response): Promise<void> => {
   const hostUserId = req.user?.id || null;
-  const meeting = await meetingService.createMeeting(hostUserId, req.body);
+  const hostUserName = req.user?.name || null;
+  const result = await meetingService.createMeeting(hostUserId, req.body, hostUserName);
 
   res.status(201).json({
     success: true,
     message: 'Meeting created successfully',
-    data: { meeting },
+    data: result,
   });
 };
 
 export const getMeetingByCode = async (req: Request, res: Response): Promise<void> => {
   const code = req.params.code as string;
-  const meeting = await meetingService.getMeetingByCode(code);
+  const result = await meetingService.getMeetingByCode(code);
 
   res.status(200).json({
     success: true,
-    data: { meeting },
+    data: result,
   });
 };
 
@@ -47,5 +48,33 @@ export const joinMeeting = async (req: Request, res: Response): Promise<void> =>
     success: true,
     message: 'Joined meeting room successfully',
     data: result,
+  });
+};
+
+export const leaveMeeting = async (req: Request, res: Response): Promise<void> => {
+  const code = req.params.code as string;
+  const participantId = req.body.participantId as string;
+
+  if (participantId) {
+    await meetingService.leaveMeeting(code, participantId);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Left meeting successfully',
+  });
+};
+
+export const endMeeting = async (req: Request, res: Response): Promise<void> => {
+  const code = req.params.code as string;
+  const hostToken =
+    (req.headers['x-host-token'] as string) || (req.body.hostToken as string) || undefined;
+  const userId = req.user?.id || null;
+
+  await meetingService.endMeeting(code, { userId, hostToken });
+
+  res.status(200).json({
+    success: true,
+    message: 'Meeting ended successfully for all participants',
   });
 };

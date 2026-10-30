@@ -4,6 +4,7 @@ import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { initSocketServer } from './sockets/index.js';
 import { pool } from './db/index.js';
+import { meetingService } from './services/meeting.service.js';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -12,9 +13,12 @@ const server = http.createServer(app);
 initSocketServer(server);
 
 // Start server
-server.listen(env.PORT, () => {
+server.listen(env.PORT, async () => {
   logger.info(`Server started in ${env.NODE_ENV} mode on port ${env.PORT}`);
   logger.info(`Health check available at http://localhost:${env.PORT}/api/health`);
+
+  // Reconcile unclosed meetings from previous server instance on startup
+  await meetingService.reconcileOnStartup();
 });
 
 // Graceful shutdown

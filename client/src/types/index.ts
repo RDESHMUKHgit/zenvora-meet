@@ -36,6 +36,7 @@ export interface MeetingRecord {
   participantsCount?: number;
   status: string;
   isEphemeral?: boolean;
+  maxParticipants?: number;
 }
 
 export interface MeetingConfig {

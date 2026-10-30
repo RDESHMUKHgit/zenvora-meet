@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Modal, Input, Switch, Button, Space, Typography, App } from 'antd';
-import { Video, Mic, Copy, Check, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Modal, Input, Switch, Select, Button, Space, Typography, App } from 'antd';
+import { Video, Mic, Copy, Check, Clock, Users, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts';
 import { meetingApi } from '../../services/meeting.service';
 import { FormField } from '../../components/forms';
 import { tokens } from '../../styles/tokens';
@@ -20,33 +21,69 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   onMeetingCreated,
 }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { message } = App.useApp();
 
   const [title, setTitle] = useState('Sync Discussion');
+  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [maxParticipants, setMaxParticipants] = useState<number>(0);
   const [isEphemeral, setIsEphemeral] = useState(true);
   const [muteMic, setMuteMic] = useState(false);
   const [turnOffCam, setTurnOffCam] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.name && !displayName) {
+      setDisplayName(user.name);
+    }
+  }, [user, displayName]);
+
+  const validate = (): boolean => {
+    if (!displayName.trim()) {
+      setNameError('Please enter your display name');
+      return false;
+    }
+    if (displayName.trim().length < 2) {
+      setNameError('Display name must be at least 2 characters');
+      return false;
+    }
+    setNameError(null);
+    return true;
+  };
 
   const handleStartInstant = async () => {
+    if (!validate()) return;
+
     try {
       setLoading(true);
-      const meeting = await meetingApi.createMeeting({
+      const res = await meetingApi.createMeeting({
         title: title.trim() || 'Sync Discussion',
+        displayName: displayName.trim(),
+        maxParticipants,
         isEphemeral,
       });
 
-      message.success(`Meeting created: ${meeting.meetingCode}`);
-      onClose();
-      if (onMeetingCreated) onMeetingCreated(meeting.meetingCode);
+      // Securely store hostToken for host authorization
+      if (res.hostToken) {
+        localStorage.setItem(`rd_host_token_${res.meeting.meetingCode}`, res.hostToken);
+      }
 
-      navigate(`/meeting/${meeting.meetingCode}`, {
+      message.success(`Meeting created: ${res.meeting.meetingCode}`);
+      onClose();
+      if (onMeetingCreated) onMeetingCreated(res.meeting.meetingCode);
+
+      navigate(`/meeting/${res.meeting.meetingCode}`, {
         state: {
-          meetingTitle: meeting.title,
+          meetingTitle: res.meeting.title,
+          displayName: displayName.trim(),
+          hostToken: res.hostToken,
+          participantId: res.participant.id,
+          role: 'host',
           muteMic,
           turnOffCam,
-          meetingRecord: meeting,
+          meetingRecord: res.meeting,
         },
       });
     } catch (err: unknown) {
@@ -58,18 +95,26 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   };
 
   const handleCopyInvite = async () => {
+    if (!validate()) return;
+
     try {
       setLoading(true);
-      const meeting = await meetingApi.createMeeting({
+      const res = await meetingApi.createMeeting({
         title: title.trim() || 'Sync Discussion',
+        displayName: displayName.trim(),
+        maxParticipants,
         isEphemeral,
       });
 
-      const link = `${window.location.origin}/meeting/${meeting.meetingCode}`;
+      if (res.hostToken) {
+        localStorage.setItem(`rd_host_token_${res.meeting.meetingCode}`, res.hostToken);
+      }
+
+      const link = `${window.location.origin}/meeting/${res.meeting.meetingCode}`;
       await navigator.clipboard.writeText(link);
       setCopiedLink(true);
-      message.success(`Meeting room ${meeting.meetingCode} created and link copied!`);
-      if (onMeetingCreated) onMeetingCreated(meeting.meetingCode);
+      message.success(`Meeting ${res.meeting.meetingCode} created and link copied!`);
+      if (onMeetingCreated) onMeetingCreated(res.meeting.meetingCode);
       setTimeout(() => setCopiedLink(false), 2500);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to generate meeting link';
@@ -84,7 +129,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Video size={18} color={tokens.colors.accentPrimary} />
-          <span style={{ fontWeight: 600 }}>Create New Meeting</span>
+          <span style={{ fontWeight: 600 }}>Create Meeting & Instant Host</span>
         </div>
       }
       open={open}
@@ -93,22 +138,58 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       width={480}
       destroyOnClose
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingTop: '12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '10px' }}>
+        {/* Meeting Topic */}
         <FormField label="Meeting Topic" id="meeting-title">
           <Input
             id="meeting-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Full-Stack Architecture Review"
+            placeholder="e.g. Full-Stack Sync"
             maxLength={80}
             size="middle"
           />
         </FormField>
 
-        {/* Room Persistence & Security */}
+        {/* Display Name (Required for guests, customizable for users) */}
+        <FormField label="Your Host Display Name" id="host-display-name" error={nameError || undefined} required>
+          <Input
+            id="host-display-name"
+            prefix={<User size={15} color={tokens.colors.textLight} />}
+            value={displayName}
+            onChange={(e) => {
+              setDisplayName(e.target.value);
+              if (nameError) setNameError(null);
+            }}
+            placeholder="How you will appear as host"
+            maxLength={50}
+            size="middle"
+          />
+        </FormField>
+
+        {/* Maximum Total Participants Configuration */}
+        <FormField label="Maximum Total Participants" id="max-participants">
+          <Select
+            id="max-participants"
+            value={maxParticipants}
+            onChange={(val) => setMaxParticipants(val)}
+            style={{ width: '100%' }}
+            size="middle"
+            suffixIcon={<Users size={14} color={tokens.colors.textLight} />}
+            options={[
+              { value: 0, label: 'Unlimited (No cap)' },
+              { value: 1, label: '1 Participant (Self / Test)' },
+              { value: 2, label: '2 Participants (1-on-1 Interview)' },
+              { value: 4, label: '4 Participants (Small Team)' },
+              { value: 8, label: '8 Participants (Group Discussion)' },
+            ]}
+          />
+        </FormField>
+
+        {/* Ephemeral / Temporary Room Toggle */}
         <div
           style={{
-            padding: '14px',
+            padding: '12px 14px',
             backgroundColor: tokens.colors.surfaceSecondary,
             border: `1px solid ${tokens.colors.surfaceBorder}`,
             borderRadius: tokens.borderRadius.base,
@@ -122,10 +203,10 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
               <Clock size={16} color={tokens.colors.textSecondary} />
               <div>
                 <Text style={{ fontSize: '13px', fontWeight: 500, color: tokens.colors.textPrimary, display: 'block' }}>
-                  Ephemeral Meeting (24h Expiry)
+                  Ephemeral Meeting (Auto-Cleanup)
                 </Text>
                 <Text type="secondary" style={{ fontSize: '11.5px' }}>
-                  Automatically cleaned up after 24 hours via Temporal lifecycle.
+                  Automatically closes after 60 seconds when empty. No permanent logs saved.
                 </Text>
               </div>
             </Space>
@@ -140,13 +221,13 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
         {/* Audio & Video Entry Preferences */}
         <div
           style={{
-            padding: '14px',
+            padding: '12px 14px',
             backgroundColor: tokens.colors.surfaceSecondary,
             border: `1px solid ${tokens.colors.surfaceBorder}`,
             borderRadius: tokens.borderRadius.base,
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '10px',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -176,7 +257,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginTop: '8px',
+            marginTop: '6px',
           }}
         >
           <Button
@@ -186,7 +267,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
             onClick={handleCopyInvite}
             loading={loading}
           >
-            {copiedLink ? 'Link Copied' : 'Create & Copy Link'}
+            {copiedLink ? 'Link Copied' : 'Create & Copy'}
           </Button>
 
           <Space size={8}>

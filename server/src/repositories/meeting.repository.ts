@@ -1,6 +1,12 @@
-import { eq, desc, or, inArray } from 'drizzle-orm';
+import { eq, desc, or, inArray, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { meetings, meetingParticipants, type Meeting, type NewMeeting } from '../db/schema/meetings.schema.js';
+import {
+  meetings,
+  meetingParticipants,
+  type Meeting,
+  type NewMeeting,
+  type MeetingParticipant,
+} from '../db/schema/meetings.schema.js';
 
 export class MeetingRepository {
   async createMeeting(data: NewMeeting): Promise<Meeting> {
@@ -22,6 +28,22 @@ export class MeetingRepository {
     return meeting;
   }
 
+  async updateMeetingStatus(
+    id: string,
+    status: string,
+    endedAt?: string | null
+  ): Promise<Meeting | undefined> {
+    const [updated] = await db
+      .update(meetings)
+      .set({
+        status,
+        ...(endedAt !== undefined ? { endedAt } : {}),
+      })
+      .where(eq(meetings.id, id))
+      .returning();
+    return updated;
+  }
+
   async getMeetingsByUserId(userId: string): Promise<Meeting[]> {
     const participantRows = await db
       .select({ meetingId: meetingParticipants.meetingId })
@@ -34,14 +56,20 @@ export class MeetingRepository {
       return db
         .select()
         .from(meetings)
-        .where(or(eq(meetings.hostUserId, userId), inArray(meetings.id, pIds)))
+        .where(
+          and(
+            or(eq(meetings.hostUserId, userId), inArray(meetings.id, pIds)),
+            // Only retain permitted meeting history (non-ephemeral or active/recent)
+            eq(meetings.isEphemeral, false)
+          )
+        )
         .orderBy(desc(meetings.createdAt));
     }
 
     return db
       .select()
       .from(meetings)
-      .where(eq(meetings.hostUserId, userId))
+      .where(and(eq(meetings.hostUserId, userId), eq(meetings.isEphemeral, false)))
       .orderBy(desc(meetings.createdAt));
   }
 
@@ -51,16 +79,32 @@ export class MeetingRepository {
     displayName: string;
     role: string;
     joinedAt: string;
-  }) {
+  }): Promise<MeetingParticipant> {
     const [participant] = await db.insert(meetingParticipants).values(data).returning();
     return participant;
   }
 
-  async getParticipants(meetingId: string) {
+  async markParticipantLeft(participantId: string, leftAt: string): Promise<void> {
+    await db
+      .update(meetingParticipants)
+      .set({ leftAt })
+      .where(eq(meetingParticipants.id, participantId));
+  }
+
+  async getParticipants(meetingId: string): Promise<MeetingParticipant[]> {
     return db
       .select()
       .from(meetingParticipants)
       .where(eq(meetingParticipants.meetingId, meetingId));
+  }
+
+  async reconcileActiveMeetings(endedAt: string): Promise<number> {
+    const result = await db
+      .update(meetings)
+      .set({ status: 'ended', endedAt })
+      .where(eq(meetings.status, 'active'))
+      .returning();
+    return result.length;
   }
 }
 

@@ -139,3 +139,4 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachment
     </div>
   );
 };
+

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input, Button, Alert, App } from 'antd';
 import { LogIn, KeyRound, User, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,12 @@ export const JoinMeetingArea: React.FC = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [errors, setErrors] = useState<{ code?: string; name?: string; general?: string }>({});
 
+  useEffect(() => {
+    if (user?.name && !displayName) {
+      setDisplayName(user.name);
+    }
+  }, [user, displayName]);
+
   const extractMeetingCode = (input: string): string => {
     let clean = input.trim().toLowerCase();
     if (clean.includes('/meeting/')) {
@@ -32,7 +38,7 @@ export const JoinMeetingArea: React.FC = () => {
     if (!cleanCode) {
       newErrors.code = 'Meeting ID or invite link is required';
     } else if (cleanCode.length < 5) {
-      newErrors.code = 'Please enter a valid meeting code (e.g. rdm-abc-xyz)';
+      newErrors.code = 'Please enter a valid meeting code (e.g. rud-6auy-nr2-6957)';
     }
 
     const cleanName = displayName.trim();
@@ -57,18 +63,17 @@ export const JoinMeetingArea: React.FC = () => {
       setIsValidating(true);
       setErrors({});
 
-      // Validate against PostgreSQL backend
-      const meeting = await meetingApi.getMeetingByCode(finalCode);
+      // Register participant record in backend (validates existence and capacity)
+      const res = await meetingApi.joinMeeting(finalCode, finalName);
 
-      // Register participant record in backend
-      await meetingApi.joinMeeting(finalCode, finalName);
-
-      message.success(`Joining ${meeting.title}...`);
+      message.success(`Joining ${res.meeting.title}...`);
       navigate(`/meeting/${finalCode}`, {
         state: {
-          meetingTitle: meeting.title,
+          meetingTitle: res.meeting.title,
           displayName: finalName,
-          meetingRecord: meeting,
+          participantId: res.participant.id,
+          role: res.participant.role,
+          meetingRecord: res.meeting,
         },
       });
     } catch (err: unknown) {
@@ -94,7 +99,7 @@ export const JoinMeetingArea: React.FC = () => {
           />
         )}
 
-        <FormField label="Meeting Code or Link" id="join-meeting-code" error={errors.code}>
+        <FormField label="Meeting Code or Invite Link" id="join-meeting-code" error={errors.code}>
           <Input
             id="join-meeting-code"
             prefix={<KeyRound size={14} color={tokens.colors.textLight} />}
@@ -105,7 +110,7 @@ export const JoinMeetingArea: React.FC = () => {
                 setErrors((prev) => ({ ...prev, code: undefined, general: undefined }));
               }
             }}
-            placeholder="e.g. rdm-abc-xyz or paste invite URL"
+            placeholder="e.g. abc-oude-yig-2324 or paste link"
             size="middle"
           />
         </FormField>
@@ -119,7 +124,7 @@ export const JoinMeetingArea: React.FC = () => {
               setDisplayName(e.target.value);
               if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
             }}
-            placeholder="Enter how you appear in meeting"
+            placeholder="Enter how you appear in the meeting"
             size="middle"
           />
         </FormField>
@@ -137,7 +142,7 @@ export const JoinMeetingArea: React.FC = () => {
             color: tokens.colors.accentPrimary,
           }}
         >
-          {isValidating ? 'Verifying Room...' : 'Join Meeting'}
+          {isValidating ? 'Checking Room...' : 'Quick Join (No Account Needed)'}
         </Button>
       </div>
     </form>
