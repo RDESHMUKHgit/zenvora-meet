@@ -86,3 +86,4 @@ export class ScreenShareManager {
     this.stop();
   }
 }
+

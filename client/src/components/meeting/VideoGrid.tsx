@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Avatar, Popover, Slider } from 'antd';
+import { Avatar, Popover, Slider, Button } from 'antd';
 import {
   Mic,
   MicOff,
@@ -11,6 +11,9 @@ import {
   Shield,
   Loader2,
   AlertCircle,
+  Copy,
+  Check,
+  UserPlus,
 } from 'lucide-react';
 import { tokens } from '../../styles/tokens';
 import type { ParticipantItem } from './ParticipantSidebar';
@@ -26,6 +29,9 @@ export interface VideoGridProps {
   isScreenSharing?: boolean;
   remotePeers: Map<string, RemotePeerMedia>;
   onVolumeChange?: (participantId: string, volume: number) => void;
+  meetingCode?: string;
+  onCopyLink?: () => void;
+  copiedLink?: boolean;
 }
 
 interface VideoTileProps {
@@ -372,6 +378,9 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
   isScreenSharing = false,
   remotePeers,
   onVolumeChange,
+  meetingCode,
+  onCopyLink,
+  copiedLink,
 }) => {
   // Check if anyone (local or remote) is actively sharing their screen
   const isLocalSharing = Boolean(isScreenSharing && screenStream);
@@ -388,14 +397,27 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
       }
     : null;
 
+  // Prioritize active speaker for larger rooms (> 4 participants)
+  const sortedParticipants = React.useMemo(() => {
+    if (participants.length <= 4 || !activeSpeakerId) {
+      return participants;
+    }
+    const speakerIdx = participants.findIndex((p) => p.id === activeSpeakerId);
+    if (speakerIdx <= 0) return participants;
+    const reordered = [...participants];
+    const [speaker] = reordered.splice(speakerIdx, 1);
+    reordered.unshift(speaker);
+    return reordered;
+  }, [participants, activeSpeakerId]);
+
   // Grid calculation when not in presentation/spotlight mode
-  const totalTiles = participants.length;
+  const totalTiles = sortedParticipants.length;
   const getGridConfig = () => {
     if (totalTiles <= 1) return { cols: '1fr', rows: '1fr' };
-    if (totalTiles === 2) return { cols: 'repeat(2, 1fr)', rows: '1fr' };
+    if (totalTiles === 2) return { cols: 'repeat(auto-fit, minmax(280px, 1fr))', rows: '1fr' };
     if (totalTiles <= 4) return { cols: 'repeat(2, 1fr)', rows: 'repeat(2, 1fr)' };
     if (totalTiles <= 6) return { cols: 'repeat(3, 1fr)', rows: 'repeat(2, 1fr)' };
-    return { cols: 'repeat(3, 1fr)', rows: 'repeat(auto-fit, minmax(200px, 1fr))' };
+    return { cols: 'repeat(3, 1fr)', rows: 'repeat(auto-fit, minmax(180px, 1fr))' };
   };
 
   // SPOTLIGHT PRESENTATION MODE: Shared screen occupies primary stage
@@ -430,7 +452,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
             isMuted={false}
             isVideoOff={false}
             displayName={activeScreenSharer.name}
-            style={{ width: '100%', height: '100%', minHeight: '300px' }}
+            style={{ width: '100%', height: '100%', minHeight: '260px' }}
           />
         </div>
 
@@ -442,11 +464,11 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
             gap: '10px',
             overflowX: 'auto',
             paddingBottom: '4px',
-            height: '140px',
+            height: '130px',
             flexShrink: 0,
           }}
         >
-          {participants.map((p) => {
+          {sortedParticipants.map((p) => {
             const remote = remotePeers.get(p.id);
             const stream = p.isSelf ? localStream : remote?.stream || null;
             const muted = p.isSelf ? isAudioMuted : (p.isMuted ?? remote?.isAudioMuted ?? false);
@@ -459,7 +481,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
               <div
                 key={p.id}
                 style={{
-                  width: '200px',
+                  width: '190px',
                   height: '100%',
                   flexShrink: 0,
                 }}
@@ -487,49 +509,126 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
 
   // STANDARD BALANCED GRID MODE
   const { cols, rows } = getGridConfig();
+  const isEmptyRoom = sortedParticipants.length <= 1;
 
   return (
     <div
       style={{
-        display: 'grid',
-        gridTemplateColumns: cols,
-        gridTemplateRows: rows,
-        gap: '12px',
+        position: 'relative',
         width: '100%',
         height: '100%',
         padding: '12px',
         boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      {participants.map((p) => {
-        const remote = remotePeers.get(p.id);
-        const stream = p.isSelf ? localStream : remote?.stream || null;
-        const muted = p.isSelf ? isAudioMuted : (p.isMuted ?? remote?.isAudioMuted ?? false);
-        const videoDisabled = p.isSelf
-          ? isVideoOff
-          : (p.isVideoOff ?? remote?.isVideoOff ?? false);
-        const sharing = p.isSelf
-          ? Boolean(isScreenSharing)
-          : (p.isScreenSharing ?? remote?.isScreenSharing ?? false);
-        const vol = remote?.volume ?? 1.0;
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: cols,
+          gridTemplateRows: rows,
+          gap: '12px',
+          flex: 1,
+          width: '100%',
+          height: '100%',
+        }}
+      >
+        {sortedParticipants.map((p) => {
+          const remote = remotePeers.get(p.id);
+          const stream = p.isSelf ? localStream : remote?.stream || null;
+          const muted = p.isSelf ? isAudioMuted : (p.isMuted ?? remote?.isAudioMuted ?? false);
+          const videoDisabled = p.isSelf
+            ? isVideoOff
+            : (p.isVideoOff ?? remote?.isVideoOff ?? false);
+          const sharing = p.isSelf
+            ? Boolean(isScreenSharing)
+            : (p.isScreenSharing ?? remote?.isScreenSharing ?? false);
+          const vol = remote?.volume ?? 1.0;
 
-        return (
-          <VideoTile
-            key={p.id}
-            stream={stream}
-            isSelf={Boolean(p.isSelf)}
-            isScreenSharing={sharing}
-            isMuted={muted}
-            isVideoOff={videoDisabled}
-            displayName={p.displayName || p.name}
-            role={p.role}
-            connectionStatus={remote?.connectionState}
-            isActiveSpeaker={p.id === activeSpeakerId}
-            volume={vol}
-            onVolumeChange={(val) => onVolumeChange?.(p.id, val)}
-          />
-        );
-      })}
+          return (
+            <VideoTile
+              key={p.id}
+              stream={stream}
+              isSelf={Boolean(p.isSelf)}
+              isScreenSharing={sharing}
+              isMuted={muted}
+              isVideoOff={videoDisabled}
+              displayName={p.displayName || p.name}
+              role={p.role}
+              connectionStatus={remote?.connectionState}
+              isActiveSpeaker={p.id === activeSpeakerId}
+              volume={vol}
+              onVolumeChange={(val) => onVolumeChange?.(p.id, val)}
+            />
+          );
+        })}
+      </div>
+
+      {/* Empty Room State (When user is alone) */}
+      {isEmptyRoom && meetingCode && onCopyLink && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '24px',
+            right: '24px',
+            backgroundColor: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(12px)',
+            border: `1px solid ${tokens.colors.surfaceBorder}`,
+            borderRadius: tokens.borderRadius.md,
+            padding: '14px 18px',
+            boxShadow: tokens.shadows.elevated,
+            maxWidth: '320px',
+            zIndex: 5,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <UserPlus size={16} color={tokens.colors.accentPrimary} />
+            <span style={{ fontWeight: 600, fontSize: '13.5px', color: tokens.colors.textPrimary }}>
+              You're the only one here
+            </span>
+          </div>
+          <div style={{ fontSize: '12px', color: tokens.colors.textSecondary, lineHeight: 1.4 }}>
+            Share the invite code or link with others to start meeting.
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
+              marginTop: '4px',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                color: tokens.colors.textPrimary,
+                backgroundColor: tokens.colors.surfaceSecondary,
+                padding: '3px 8px',
+                borderRadius: tokens.borderRadius.sm,
+                border: `1px solid ${tokens.colors.surfaceBorderSubtle}`,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {meetingCode}
+            </span>
+            <Button
+              size="small"
+              type="primary"
+              icon={copiedLink ? <Check size={12} /> : <Copy size={12} />}
+              onClick={onCopyLink}
+            >
+              {copiedLink ? 'Copied' : 'Copy Link'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -8,6 +8,8 @@ import {
   App,
   Dropdown,
   Select,
+  Drawer,
+  Alert,
   type MenuProps,
 } from 'antd';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
@@ -25,6 +27,10 @@ import {
   Volume2,
   CheckCircle2,
   AlertTriangle,
+  Download,
+  WifiOff,
+  Radio,
+  FileVideo,
 } from 'lucide-react';
 import { useAuth } from '../../contexts';
 import { useDocumentTitle } from '../../hooks';
@@ -38,6 +44,7 @@ import {
 } from '../../components/meeting';
 import { ChatPanel, type ChatMessage } from '../../components/chat';
 import { useMediaEngine } from '../../features/media';
+import { useScreenRecorder } from '../../features/recording';
 import { ROUTES } from '../../constants';
 import { tokens } from '../../styles/tokens';
 import type { MeetingRecord } from '../../types';
@@ -91,15 +98,27 @@ export const MeetingPage: React.FC = () => {
   const [myRole, setMyRole] = useState<'host' | 'cohost' | 'participant'>(stateData.role || 'participant');
   const [copiedLink, setCopiedLink] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'chat' | 'roster' | null>(null);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [participants, setParticipants] = useState<ParticipantItem[]>([]);
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(true);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
 
   useDocumentTitle(meeting ? `${meeting.title} · Meeting` : 'Conference Meeting');
 
-  // Real WebRTC Media Engine hook
+  // Handle window resize for mobile vs desktop responsive layout
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Real WebRTC Media Engine
   const {
     localStream,
     screenStream,
@@ -126,12 +145,36 @@ export const MeetingPage: React.FC = () => {
     initialTurnOffVideo: stateData.turnOffCam ?? false,
   });
 
-  // Notify on media device errors (permissions, device unavailable)
+  // MediaRecorder Screen Share Recording
+  const {
+    recordingState,
+    durationSeconds: recordDurationSeconds,
+    recordingResult,
+    consentModalOpen,
+    downloadModalOpen,
+    recordingError,
+    requestStartRecording,
+    confirmStartRecording,
+    cancelConsent,
+    pauseRecording,
+    resumeRecording,
+    stopRecording,
+    discardRecording,
+    downloadRecording,
+  } = useScreenRecorder();
+
+  // Notify on media device errors or recording errors
   useEffect(() => {
     if (mediaError) {
       message.error(mediaError);
     }
   }, [mediaError, message]);
+
+  useEffect(() => {
+    if (recordingError) {
+      message.error(recordingError);
+    }
+  }, [recordingError, message]);
 
   // Load and verify meeting from PostgreSQL backend
   const verifyRoom = useCallback(async () => {
@@ -167,7 +210,7 @@ export const MeetingPage: React.FC = () => {
     }
   }, [meeting, verifyRoom]);
 
-  // Duration timer
+  // Meeting duration timer
   useEffect(() => {
     const timer = setInterval(() => {
       setDurationSeconds((prev) => prev + 1);
@@ -175,11 +218,17 @@ export const MeetingPage: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Socket.IO Room Lifecycle Integration
+  // Socket.IO Room Lifecycle & Messaging Integration
   useEffect(() => {
     if (!id || !meeting) return;
 
     const socket = connectSocket();
+
+    const onConnect = () => setSocketConnected(true);
+    const onDisconnect = () => setSocketConnected(false);
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
 
     // 1. Join Socket Room
     socket.emit('room:join', {
@@ -208,7 +257,6 @@ export const MeetingPage: React.FC = () => {
             isSelf: p.id === participantId,
           }))
         );
-        // Pre-register existing peers into media engine
         syncRoomParticipants(payload.room.participants);
       }
     });
@@ -259,7 +307,39 @@ export const MeetingPage: React.FC = () => {
       }
     );
 
-    // 7. Host Mute All Command
+    // 7. In-Call Chat Messaging
+    socket.on(
+      'chat:message',
+      (payload: {
+        id: string;
+        senderParticipantId: string;
+        senderName: string;
+        content: string;
+        timestamp: string;
+      }) => {
+        const isSelf = payload.senderParticipantId === participantId;
+        const msgTime = new Date(payload.timestamp).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        const newMsg: ChatMessage = {
+          id: payload.id,
+          senderName: payload.senderName,
+          isSelf,
+          content: payload.content,
+          timestamp: msgTime,
+        };
+
+        setMessages((prev) => [...prev, newMsg]);
+
+        if (!isSelf && sidebarTab !== 'chat') {
+          setUnreadChatCount((prev) => prev + 1);
+        }
+      }
+    );
+
+    // 8. Host Mute All Command
     socket.on('host:mute-all', () => {
       if (myRole !== 'host') {
         if (!isAudioMuted) {
@@ -269,7 +349,7 @@ export const MeetingPage: React.FC = () => {
       }
     });
 
-    // 8. Meeting Ended by Host
+    // 9. Meeting Ended by Host
     socket.on('meeting:ended', (payload: { reason?: string }) => {
       Modal.info({
         title: 'Meeting Ended',
@@ -284,17 +364,20 @@ export const MeetingPage: React.FC = () => {
       }, 3500);
     });
 
-    // 9. Room Errors (e.g. Capacity Reached)
+    // 10. Room Errors
     socket.on('room:error', (payload: { message: string }) => {
       message.error(payload.message || 'Room error encountered');
     });
 
     return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
       socket.off('room:joined');
       socket.off('room:participants');
       socket.off('participant:joined');
       socket.off('participant:left');
       socket.off('participant:media-updated');
+      socket.off('chat:message');
       socket.off('host:mute-all');
       socket.off('meeting:ended');
       socket.off('room:error');
@@ -309,6 +392,7 @@ export const MeetingPage: React.FC = () => {
     myRole,
     isAudioMuted,
     isVideoOff,
+    sidebarTab,
     syncRoomParticipants,
     toggleMicrophone,
     message,
@@ -371,16 +455,27 @@ export const MeetingPage: React.FC = () => {
   };
 
   const handleSendMessage = (content: string) => {
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      senderName: displayName,
-      isSelf: true,
-      content,
-      timestamp: timeStr,
-    };
-    setMessages((prev) => [...prev, newMsg]);
+    if (!id || !content.trim()) return;
+    const socket = connectSocket();
+    socket.emit('chat:message', {
+      meetingCode: id,
+      participantId,
+      content: content.trim(),
+    });
+  };
+
+  const handleToggleChat = () => {
+    setSidebarTab((prev) => {
+      const next = prev === 'chat' ? null : 'chat';
+      if (next === 'chat') {
+        setUnreadChatCount(0);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleRoster = () => {
+    setSidebarTab((prev) => (prev === 'roster' ? null : 'roster'));
   };
 
   // Synchronize local states with display list
@@ -413,17 +508,19 @@ export const MeetingPage: React.FC = () => {
     return (
       <div
         style={{
-          minHeight: '80vh',
+          width: '100vw',
+          height: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '16px',
+          backgroundColor: tokens.colors.surfaceSecondary,
         }}
       >
         <Spin size="large" />
-        <div style={{ fontSize: '15px', color: tokens.colors.textSecondary }}>
-          Connecting to secure meeting room...
+        <div style={{ fontSize: '15px', color: tokens.colors.textSecondary, fontWeight: 500 }}>
+          Securing connection to meeting room...
         </div>
       </div>
     );
@@ -431,20 +528,31 @@ export const MeetingPage: React.FC = () => {
 
   if (loadError || !meeting) {
     return (
-      <div style={{ maxWidth: '600px', margin: '60px auto', padding: '24px' }}>
-        <Result
-          status="404"
-          title="Meeting Not Found or Ended"
-          subTitle={loadError || `The meeting code '${id}' does not exist or has expired.`}
-          extra={[
-            <Button type="primary" key="home" onClick={() => navigate(ROUTES.HOME)}>
-              Return to Homepage
-            </Button>,
-            <Button key="retry" onClick={verifyRoom}>
-              Retry Connection
-            </Button>,
-          ]}
-        />
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: tokens.colors.surfaceSecondary,
+        }}
+      >
+        <div style={{ maxWidth: '520px', padding: '24px' }}>
+          <Result
+            status="404"
+            title="Meeting Not Found or Ended"
+            subTitle={loadError || `The meeting code '${id}' does not exist or has expired.`}
+            extra={[
+              <Button type="primary" key="home" onClick={() => navigate(ROUTES.HOME)}>
+                Return to Homepage
+              </Button>,
+              <Button key="retry" onClick={verifyRoom}>
+                Retry Connection
+              </Button>,
+            ]}
+          />
+        </div>
       </div>
     );
   }
@@ -455,6 +563,9 @@ export const MeetingPage: React.FC = () => {
     meeting.maxParticipants === 0
       ? `${displayParticipants.length} (Unlimited)`
       : `${displayParticipants.length} / ${meeting.maxParticipants}`;
+
+  const hasPermissionError =
+    devices.permissions.camera === 'denied' || devices.permissions.microphone === 'denied';
 
   const hostLeaveMenu: MenuProps['items'] = [
     {
@@ -477,34 +588,50 @@ export const MeetingPage: React.FC = () => {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 72px)',
+        width: '100vw',
+        height: '100vh',
         backgroundColor: tokens.colors.surfaceSecondary,
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
-      {/* Top Status Bar */}
-      <div
+      {/* Top Status Bar (Occupies Viewport Header) */}
+      <header
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '10px 20px',
+          padding: '10px 18px',
           backgroundColor: tokens.colors.surfacePrimary,
           borderBottom: `1px solid ${tokens.colors.surfaceBorder}`,
           flexShrink: 0,
+          zIndex: 10,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div>
+        {/* Room Title & Code */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Title level={4} style={{ margin: 0, fontWeight: 600, color: tokens.colors.textPrimary }}>
+              <Title
+                level={5}
+                style={{
+                  margin: 0,
+                  fontWeight: 600,
+                  color: tokens.colors.textPrimary,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: isMobile ? '130px' : '260px',
+                }}
+              >
                 {meeting.title}
               </Title>
               {isHost && (
                 <span
                   style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
                     color: tokens.colors.accentPrimary,
                     backgroundColor: tokens.colors.accentPrimaryLight,
                     padding: '2px 6px',
@@ -517,14 +644,14 @@ export const MeetingPage: React.FC = () => {
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
               <span
                 style={{
                   fontFamily: 'monospace',
-                  fontSize: '12px',
+                  fontSize: '11.5px',
                   color: tokens.colors.textMuted,
                   backgroundColor: tokens.colors.surfaceSecondary,
-                  padding: '2px 8px',
+                  padding: '2px 6px',
                   borderRadius: tokens.borderRadius.sm,
                   border: `1px solid ${tokens.colors.surfaceBorder}`,
                 }}
@@ -533,33 +660,56 @@ export const MeetingPage: React.FC = () => {
               </span>
               <Button
                 size="small"
+                style={{ paddingInline: '6px', height: '22px', fontSize: '11px' }}
                 icon={
-                  copiedLink ? <Check size={12} color={tokens.colors.success} /> : <Copy size={12} />
+                  copiedLink ? <Check size={11} color={tokens.colors.success} /> : <Copy size={11} />
                 }
                 onClick={handleCopyLink}
               >
-                {copiedLink ? 'Copied' : 'Copy Link'}
+                {copiedLink ? 'Copied' : 'Copy'}
               </Button>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {/* Capacity Counter */}
+        {/* Live Status Badges & Device Settings */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Active Screen Recording Pill */}
+          {(recordingState === 'recording' || recordingState === 'paused') && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: tokens.colors.error,
+                backgroundColor: tokens.colors.errorLight,
+                padding: '3px 8px',
+                borderRadius: tokens.borderRadius.sm,
+                border: `1px solid ${tokens.colors.errorBorder}`,
+              }}
+            >
+              <Radio size={12} className="spin-animation" />
+              <span>REC</span>
+            </div>
+          )}
+
+          {/* Participant Count */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              fontSize: '12.5px',
+              gap: '5px',
+              fontSize: '12px',
               color: tokens.colors.textSecondary,
-              padding: '4px 10px',
+              padding: '3px 8px',
               backgroundColor: tokens.colors.surfaceSecondary,
               borderRadius: tokens.borderRadius.sm,
               border: `1px solid ${tokens.colors.surfaceBorder}`,
             }}
           >
-            <Users size={14} color={tokens.colors.textLight} />
+            <Users size={13} color={tokens.colors.textLight} />
             <span>{capacityLabel}</span>
           </div>
 
@@ -568,45 +718,72 @@ export const MeetingPage: React.FC = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              fontSize: '13px',
+              gap: '5px',
+              fontSize: '12.5px',
               color: tokens.colors.textSecondary,
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            <Clock size={14} color={tokens.colors.textLight} />
+            <Clock size={13} color={tokens.colors.textLight} />
             <span>{formatDuration(durationSeconds)}</span>
           </div>
 
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              fontSize: '12px',
-              color: tokens.colors.success,
-              backgroundColor: tokens.colors.successLight,
-              padding: '3px 8px',
-              borderRadius: tokens.borderRadius.sm,
-            }}
-          >
-            <ShieldCheck size={13} />
-            <span>Encrypted Room</span>
-          </div>
+          {/* Encrypted Room Badge (Desktop) */}
+          {!isMobile && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11.5px',
+                color: tokens.colors.success,
+                backgroundColor: tokens.colors.successLight,
+                padding: '3px 7px',
+                borderRadius: tokens.borderRadius.sm,
+              }}
+            >
+              <ShieldCheck size={13} />
+              <span>Encrypted</span>
+            </div>
+          )}
 
+          {/* Device Settings Action */}
           <Button
-            size="middle"
-            icon={<Settings size={15} />}
+            size="small"
+            icon={<Settings size={14} />}
             onClick={() => setDeviceSettingsOpen(true)}
           >
             Devices
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Main Stage & Side Drawer Split */}
+      {/* Socket Disconnected Alert Banner */}
+      {!socketConnected && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<WifiOff size={15} />}
+          message="Connection to meeting server was lost. Reconnecting..."
+          banner
+        />
+      )}
+
+      {/* Permission Denied Alert Banner */}
+      {hasPermissionError && (
+        <Alert
+          type="error"
+          showIcon
+          icon={<AlertTriangle size={15} />}
+          message="Camera or microphone access is blocked. Please allow device permissions in your browser address bar to transmit media."
+          banner
+          closable
+        />
+      )}
+
+      {/* Main Video Stage & Side Panel Split */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
-        {/* Main Video Stage */}
+        {/* Video Canvas Stage */}
         <div
           style={{
             flex: 1,
@@ -618,8 +795,8 @@ export const MeetingPage: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Responsive Live Video Grid */}
-          <div style={{ flex: 1, width: '100%', minHeight: 0, overflow: 'auto' }}>
+          {/* Responsive Adaptive Video Grid */}
+          <div style={{ flex: 1, width: '100%', minHeight: 0, overflow: 'hidden' }}>
             <VideoGrid
               participants={displayParticipants}
               activeSpeakerId={participantId}
@@ -630,11 +807,14 @@ export const MeetingPage: React.FC = () => {
               isScreenSharing={isScreenSharing}
               remotePeers={remotePeers}
               onVolumeChange={setRemoteVolume}
+              meetingCode={roomCode}
+              onCopyLink={handleCopyLink}
+              copiedLink={copiedLink}
             />
           </div>
 
-          {/* Floating Control Dock */}
-          <div style={{ padding: '16px 0', zIndex: 10 }}>
+          {/* Floating Responsive Meeting Control Dock */}
+          <div style={{ padding: '12px 0 16px 0', zIndex: 10 }}>
             {isHost ? (
               <Dropdown menu={{ items: hostLeaveMenu }} placement="topRight">
                 <div>
@@ -645,13 +825,19 @@ export const MeetingPage: React.FC = () => {
                     chatOpen={sidebarTab === 'chat'}
                     rosterOpen={sidebarTab === 'roster'}
                     participantCount={displayParticipants.length}
-                    unreadCount={messages.length}
+                    unreadCount={unreadChatCount}
+                    recordingState={recordingState}
+                    recordDurationSeconds={recordDurationSeconds}
                     onToggleMic={toggleMicrophone}
                     onToggleCam={toggleCamera}
                     onToggleScreenShare={toggleScreenShare}
-                    onToggleChat={() => setSidebarTab((prev) => (prev === 'chat' ? null : 'chat'))}
-                    onToggleRoster={() => setSidebarTab((prev) => (prev === 'roster' ? null : 'roster'))}
+                    onToggleChat={handleToggleChat}
+                    onToggleRoster={handleToggleRoster}
                     onOpenSettings={() => setDeviceSettingsOpen(true)}
+                    onStartRecord={() => requestStartRecording(screenStream)}
+                    onPauseRecord={pauseRecording}
+                    onResumeRecord={resumeRecording}
+                    onStopRecord={stopRecording}
                     onLeave={() => setEndModalOpen(true)}
                   />
                 </div>
@@ -664,39 +850,189 @@ export const MeetingPage: React.FC = () => {
                 chatOpen={sidebarTab === 'chat'}
                 rosterOpen={sidebarTab === 'roster'}
                 participantCount={displayParticipants.length}
-                unreadCount={messages.length}
+                unreadCount={unreadChatCount}
+                recordingState={recordingState}
+                recordDurationSeconds={recordDurationSeconds}
                 onToggleMic={toggleMicrophone}
                 onToggleCam={toggleCamera}
                 onToggleScreenShare={toggleScreenShare}
-                onToggleChat={() => setSidebarTab((prev) => (prev === 'chat' ? null : 'chat'))}
-                onToggleRoster={() => setSidebarTab((prev) => (prev === 'roster' ? null : 'roster'))}
+                onToggleChat={handleToggleChat}
+                onToggleRoster={handleToggleRoster}
                 onOpenSettings={() => setDeviceSettingsOpen(true)}
+                onStartRecord={() => requestStartRecording(screenStream)}
+                onPauseRecord={pauseRecording}
+                onResumeRecord={resumeRecording}
+                onStopRecord={stopRecording}
                 onLeave={handleLeaveRoom}
               />
             )}
           </div>
         </div>
 
-        {/* Collapsible Side Panel (Chat or Participants) */}
-        {sidebarTab === 'chat' && (
-          <ChatPanel
-            onClose={() => setSidebarTab(null)}
-            messages={messages}
-            onSendMessage={handleSendMessage}
-          />
-        )}
+        {/* Side Panel: Desktop side-by-side vs Mobile/Tablet Drawer */}
+        {!isMobile ? (
+          <>
+            {sidebarTab === 'chat' && (
+              <ChatPanel
+                onClose={() => setSidebarTab(null)}
+                messages={messages}
+                onSendMessage={handleSendMessage}
+              />
+            )}
 
-        {sidebarTab === 'roster' && (
-          <ParticipantSidebar
+            {sidebarTab === 'roster' && (
+              <ParticipantSidebar
+                onClose={() => setSidebarTab(null)}
+                participants={displayParticipants}
+                isHost={isHost}
+                onMuteAll={handleMuteAll}
+                remotePeers={remotePeers}
+                onVolumeChange={setRemoteVolume}
+              />
+            )}
+          </>
+        ) : (
+          <Drawer
+            open={Boolean(sidebarTab)}
             onClose={() => setSidebarTab(null)}
-            participants={displayParticipants}
-            isHost={isHost}
-            onMuteAll={handleMuteAll}
-            remotePeers={remotePeers}
-            onVolumeChange={setRemoteVolume}
-          />
+            placement="right"
+            width="100%"
+            styles={{ body: { padding: 0 } }}
+            title={sidebarTab === 'chat' ? 'In-Call Chat' : 'Participants'}
+          >
+            {sidebarTab === 'chat' && (
+              <ChatPanel
+                onClose={() => setSidebarTab(null)}
+                messages={messages}
+                onSendMessage={handleSendMessage}
+              />
+            )}
+
+            {sidebarTab === 'roster' && (
+              <ParticipantSidebar
+                onClose={() => setSidebarTab(null)}
+                participants={displayParticipants}
+                isHost={isHost}
+                onMuteAll={handleMuteAll}
+                remotePeers={remotePeers}
+                onVolumeChange={setRemoteVolume}
+              />
+            )}
+          </Drawer>
         )}
       </div>
+
+      {/* Screen Share Recording Consent Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Radio size={18} color={tokens.colors.error} />
+            <span>Record Screen Share</span>
+          </div>
+        }
+        open={consentModalOpen}
+        onCancel={cancelConsent}
+        footer={[
+          <Button key="cancel" onClick={cancelConsent}>
+            Cancel
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            danger
+            onClick={confirmStartRecording}
+          >
+            Consent & Start Recording
+          </Button>,
+        ]}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '6px 0' }}>
+          <p style={{ margin: 0, fontSize: '13.5px', color: tokens.colors.textPrimary, lineHeight: 1.5 }}>
+            You are about to start recording your active screen presentation using your browser's native MediaRecorder API.
+          </p>
+
+          <div
+            style={{
+              padding: '10px 12px',
+              backgroundColor: tokens.colors.surfaceSecondary,
+              borderRadius: tokens.borderRadius.sm,
+              border: `1px solid ${tokens.colors.surfaceBorder}`,
+              fontSize: '12px',
+              color: tokens.colors.textSecondary,
+              lineHeight: 1.45,
+            }}
+          >
+            <strong>Audio Notice:</strong> System and application audio are captured only if permitted and supported by your operating system and browser. Audio presence cannot be guaranteed in every recording environment.
+          </div>
+
+          <p style={{ margin: 0, fontSize: '12.5px', color: tokens.colors.textMuted }}>
+            Please ensure that all meeting participants have consented to this recording. The recording is generated entirely in your local browser session and will be downloaded directly to your computer when stopped.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Recording Completed & Download Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FileVideo size={18} color={tokens.colors.accentPrimary} />
+            <span>Recording Ready to Download</span>
+          </div>
+        }
+        open={downloadModalOpen}
+        onCancel={discardRecording}
+        width={560}
+        footer={[
+          <Button key="discard" onClick={discardRecording}>
+            Discard
+          </Button>,
+          <Button
+            key="download"
+            type="primary"
+            icon={<Download size={14} />}
+            onClick={() =>
+              downloadRecording(
+                `rd-meet-${roomCode}-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`
+              )
+            }
+          >
+            Download Recording
+          </Button>,
+        ]}
+      >
+        {recordingResult && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '6px 0' }}>
+            <video
+              src={recordingResult.blobUrl}
+              controls
+              style={{
+                width: '100%',
+                maxHeight: '280px',
+                borderRadius: tokens.borderRadius.base,
+                backgroundColor: '#000000',
+              }}
+            />
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '12.5px',
+                color: tokens.colors.textSecondary,
+                padding: '8px 12px',
+                backgroundColor: tokens.colors.surfaceSecondary,
+                borderRadius: tokens.borderRadius.sm,
+                border: `1px solid ${tokens.colors.surfaceBorder}`,
+              }}
+            >
+              <span>Duration: <strong>{formatDuration(recordingResult.durationSeconds)}</strong></span>
+              <span>Size: <strong>{(recordingResult.sizeBytes / (1024 * 1024)).toFixed(2)} MB</strong></span>
+              <span>Format: <strong>{recordingResult.mimeType.split(';')[0]}</strong></span>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* In-Meeting Audio / Video Device Settings Modal */}
       <Modal

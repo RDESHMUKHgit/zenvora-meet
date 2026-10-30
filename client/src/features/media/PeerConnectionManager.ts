@@ -322,3 +322,4 @@ export class PeerConnectionManager {
     this.makingOfferMap.clear();
   }
 }
+

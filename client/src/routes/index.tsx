@@ -12,12 +12,15 @@ import { ROUTES } from '../constants';
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
+      {/* Standalone full-viewport meeting experience without dashboard chrome */}
+      <Route path={ROUTES.MEETING} element={<MeetingPage />} />
+
+      {/* Main portal layout for landing, auth, history, settings */}
       <Route path="/" element={<MainLayout />}>
         <Route index element={<HomePage />} />
         <Route path={ROUTES.AUTH} element={<Navigate to={ROUTES.LOGIN} replace />} />
         <Route path={ROUTES.LOGIN} element={<LoginPage />} />
         <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
-        <Route path={ROUTES.MEETING} element={<MeetingPage />} />
         <Route path={ROUTES.HISTORY} element={<HistoryPage />} />
         <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />

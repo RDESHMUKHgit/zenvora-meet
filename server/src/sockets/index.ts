@@ -153,6 +153,50 @@ export const initSocketServer = (httpServer: HttpServer): SocketIOServer => {
       }
     );
 
+    // In-Call Chat Messaging
+    socket.on(
+      'chat:message',
+      (data: {
+        meetingCode: string;
+        participantId: string;
+        content: string;
+      }) => {
+        const code = data.meetingCode?.toLowerCase().trim();
+        const content = typeof data.content === 'string' ? data.content.trim() : '';
+        if (!code || !content || !data.participantId) return;
+
+        // Content length guard
+        const sanitizedContent = content.slice(0, 2000);
+
+        const room = roomManager.getRoom(code);
+        if (!room) return;
+
+        // Verify socket is joined in this room
+        if (!socket.rooms.has(`room:${code}`)) {
+          logger.warn({ socketId: socket.id, meetingCode: code }, 'Chat rejected: socket not in room channel');
+          return;
+        }
+
+        const participant = room.participants.get(data.participantId);
+        if (!participant) return;
+
+        const messagePayload = {
+          id: `msg-${Date.now()}-${crypto.randomUUID().slice(0, 6)}`,
+          meetingCode: code,
+          senderParticipantId: participant.id,
+          senderName: participant.displayName,
+          content: sanitizedContent,
+          timestamp: nowIso(),
+        };
+
+        io?.to(`room:${code}`).emit('chat:message', messagePayload);
+        logger.info(
+          { meetingCode: code, senderId: participant.id, messageId: messagePayload.id },
+          'In-call chat message broadcasted'
+        );
+      }
+    );
+
     // Host Action Handling (Mute All, Kick)
     socket.on(
       'host:action',
