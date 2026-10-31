@@ -176,7 +176,8 @@ export class MeetingService {
   async joinMeeting(
     code: string,
     userId: string | null,
-    displayName: string
+    displayName: string,
+    hostToken?: string
   ): Promise<{ meeting: Meeting; participant: MeetingParticipant }> {
     const { meeting } = await this.getMeetingByCode(code);
 
@@ -188,9 +189,13 @@ export class MeetingService {
     }
 
     const now = nowIso();
-    const isHost = Boolean(meeting.hostUserId && meeting.hostUserId === userId);
+    // Only grant host role if a valid hostToken is explicitly provided
+    // Merely having the same account does not automatically make a joining user the host
+    const isHost = Boolean(
+      hostToken && meeting.hostTokenHash && this.hashToken(hostToken) === meeting.hostTokenHash
+    );
 
-    // For Quick Join meetings: no account required, creates participant record
+    // Default to participant role for anyone joining
     const participant = await this.meetingRepo.addParticipant({
       meetingId: meeting.id,
       userId: userId || null,

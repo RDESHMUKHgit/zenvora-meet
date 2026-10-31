@@ -66,9 +66,11 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [volSliderOpen, setVolSliderOpen] = useState(false);
 
+  const isDisconnected = !isSelf && (connectionStatus === 'disconnected' || connectionStatus === 'failed');
+
   useEffect(() => {
     if (videoRef.current) {
-      if (stream) {
+      if (stream && !isDisconnected && stream.active && stream.getVideoTracks().some((t) => t.readyState === 'live')) {
         if (videoRef.current.srcObject !== stream) {
           videoRef.current.srcObject = stream;
         }
@@ -76,7 +78,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         videoRef.current.srcObject = null;
       }
     }
-  }, [stream]);
+  }, [stream, isDisconnected]);
 
   // Determine avatar letter
   const avatarLetter = (displayName || 'P').trim().charAt(0).toUpperCase();
@@ -141,7 +143,41 @@ export const VideoTile: React.FC<VideoTileProps> = ({
       }}
     >
       {/* Video element or placeholder */}
-      {isVideoOff && !isScreenSharing ? (
+      {isDisconnected ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px',
+            userSelect: 'none',
+          }}
+        >
+          <Avatar
+            size={68}
+            style={{
+              backgroundColor: tokens.colors.surfaceSecondary,
+              color: tokens.colors.textMuted,
+              fontSize: '26px',
+              fontWeight: 600,
+              border: `1px solid ${tokens.colors.surfaceBorder}`,
+            }}
+          >
+            {avatarLetter}
+          </Avatar>
+          <div
+            style={{
+              fontSize: '12.5px',
+              color: tokens.colors.textMuted,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span>{displayName} has left the meeting</span>
+          </div>
+        </div>
+      ) : isVideoOff && !isScreenSharing ? (
         <div
           style={{
             display: 'flex',
@@ -221,7 +257,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
       )}
 
       {/* Remote Peer Connection Status Badge (Top Right) */}
-      {!isSelf && connectionStatus && connectionStatus !== 'connected' && (
+      {!isSelf && connectionStatus && connectionStatus !== 'connected' && !isDisconnected && (
         <div
           style={{
             position: 'absolute',

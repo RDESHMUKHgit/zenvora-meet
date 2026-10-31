@@ -41,8 +41,11 @@ export const joinMeeting = async (req: Request, res: Response): Promise<void> =>
   const code = req.params.code as string;
   const userId = req.user?.id || null;
   const displayName = req.body.displayName;
+  const hostToken = (req.headers['x-host-token'] || req.headers['X-Host-Token'] || req.body?.hostToken) as
+    | string
+    | undefined;
 
-  const result = await meetingService.joinMeeting(code, userId, displayName);
+  const result = await meetingService.joinMeeting(code, userId, displayName, hostToken);
 
   res.status(200).json({
     success: true,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Input, Switch, Select, Button, Space, Typography, App } from 'antd';
-import { Video, Mic, Copy, Check, Clock, Users, User } from 'lucide-react';
+import { Video, Mic, Copy, Check, Users, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts';
 import { meetingApi } from '../../services/meeting.service';
@@ -29,7 +29,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
     () => user?.name || (typeof window !== 'undefined' ? localStorage.getItem('rd_display_name') : null) || ''
   );
   const [maxParticipants, setMaxParticipants] = useState<number>(0);
-  const [isEphemeral, setIsEphemeral] = useState(true);
+  const isEphemeral = true;
   const [muteMic, setMuteMic] = useState(false);
   const [turnOffCam, setTurnOffCam] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -183,45 +183,12 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
             suffixIcon={<Users size={14} color={tokens.colors.textLight} />}
             options={[
               { value: 0, label: 'Unlimited (No cap)' },
-              { value: 1, label: '1 Participant (Self / Test)' },
-              { value: 2, label: '2 Participants (1-on-1 Interview)' },
+              { value: 2, label: '2 Participants (1-on-1 Meeting)' },
               { value: 4, label: '4 Participants (Small Team)' },
               { value: 8, label: '8 Participants (Group Discussion)' },
             ]}
           />
         </FormField>
-
-        {/* Ephemeral / Temporary Room Toggle */}
-        <div
-          style={{
-            padding: '12px 14px',
-            backgroundColor: tokens.colors.surfaceSecondary,
-            border: `1px solid ${tokens.colors.surfaceBorder}`,
-            borderRadius: tokens.borderRadius.base,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Space size={8} align="center">
-              <Clock size={16} color={tokens.colors.textSecondary} />
-              <div>
-                <Text style={{ fontSize: '13px', fontWeight: 500, color: tokens.colors.textPrimary, display: 'block' }}>
-                  Ephemeral Meeting (Auto-Cleanup)
-                </Text>
-                <Text type="secondary" style={{ fontSize: '11.5px' }}>
-                  Automatically closes after 60 seconds when empty. No permanent logs saved.
-                </Text>
-              </div>
-            </Space>
-            <Switch
-              size="small"
-              checked={isEphemeral}
-              onChange={setIsEphemeral}
-            />
-          </div>
-        </div>
 
         {/* Audio & Video Entry Preferences */}
         <div

@@ -88,6 +88,10 @@ export const MeetingPage: React.FC = () => {
   });
 
   const [hostToken] = useState<string | undefined>(() => {
+    // If explicitly navigated as a participant, do not claim or inherit hostToken
+    if (stateData.role === 'participant') {
+      return undefined;
+    }
     const token =
       stateData.hostToken ||
       (id ? localStorage.getItem(`rd_host_token_${id}`) : null) ||
@@ -230,7 +234,11 @@ export const MeetingPage: React.FC = () => {
       // Join room in backend if not already joined in state
       if (!stateData.participantId) {
         const joinRes = await meetingApi.joinMeeting(id, displayName);
-        setMyRole(joinRes.participant.role);
+        if (stateData.role === 'participant') {
+          setMyRole('participant');
+        } else {
+          setMyRole(joinRes.participant.role);
+        }
         localStorage.setItem(`rd_p_id_${id}`, joinRes.participant.id);
       }
     } catch (err: unknown) {
@@ -319,7 +327,8 @@ export const MeetingPage: React.FC = () => {
 
     // 5. Participant Left notification
     socket.on('participant:left', (payload: { participantId: string; displayName: string }) => {
-      message.info(`${payload.displayName} left the room`);
+      message.info(`${payload.displayName} has left the meeting`);
+      setParticipants((prev) => prev.filter((p) => p.id !== payload.participantId));
     });
 
     // 6. Media State Updates from peers

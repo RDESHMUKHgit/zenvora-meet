@@ -68,7 +68,8 @@ export const JoinMeetingArea: React.FC = () => {
       // Register participant record in backend (validates existence and capacity)
       const res = await meetingApi.joinMeeting(finalCode, finalName);
 
-      // Persist display name and participant identity
+      // Clear any prior host token for this code since user is joining via join flow
+      localStorage.removeItem(`rd_host_token_${finalCode}`);
       localStorage.setItem('rd_display_name', finalName);
       localStorage.setItem(`rd_display_name_${finalCode}`, finalName);
       localStorage.setItem(`rd_p_id_${finalCode}`, res.participant.id);
@@ -79,7 +80,8 @@ export const JoinMeetingArea: React.FC = () => {
           meetingTitle: res.meeting.title,
           displayName: finalName,
           participantId: res.participant.id,
-          role: res.participant.role,
+          role: 'participant',
+          hostToken: undefined,
           meetingRecord: res.meeting,
         },
       });
